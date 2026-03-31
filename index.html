@@ -1092,74 +1092,107 @@ function parseTextUDI(text) {
 }
 
 // GS1 바코드 원시값 파싱 (DataMatrix/QR 스캔 결과용)
-// 지원 포맷:
-//   괄호형: (01)08800211800022(10)250609(17)280610
-//   연속형: 01088002118000221025060917280610
-//   공백형: (01) 0 8800 2118 00022 (10) 250609 (17) 280610
-//   GS구분자형: 01....\x1D10....\x1D17....
+// GS1 AI 길이 규칙:
+//   AI 01 = 고정 14자리 (GTIN)
+//   AI 11 = 고정 6자리 (제조일)
+//   AI 17 = 고정 6자리 (유효기한)
+//   AI 10 = 가변길이 (로트번호) → GS 구분자(\x1D)까지 또는 세그먼트 끝까지
+//   AI 21 = 가변길이 (시리얼번호)
 function parseGS1(raw) {
   if(!raw) { toast('코드를 읽지 못했습니다', 'err'); return; }
 
   let di = '', lot = '', exp = '';
 
-  // GS 구분자(ASCII 29, 30)를 파이프로 변환 후 공백 전체 제거
-  let norm = raw.replace(/[\x1D\x1E]/g, '|').replace(/\s+/g, '');
+  // 공백 제거, GS 구분자(ASCII 29/30) → 파이프
+  let norm = raw.replace(/\s+/g, '').replace(/[\x1D\x1E\u001D\u001E]/g, '|');
 
   // ── 1. 괄호형 (01)...(10)...(17)... ──────────────────
-  const hasBracket = norm.includes('(01)') || norm.includes('(10)') || norm.includes('(17)');
-  if(hasBracket) {
-    const m01 = norm.match(/\(01\)([^\(\|]{10,20})/);
-    const m10 = norm.match(/\(10\)([^\(\|]{1,20})/);
-    const m17 = norm.match(/\(17\)([^\(\|]{6,8})/);
+  if(norm.includes('(01)') || norm.includes('(10)') || norm.includes('(17)')) {
+    const m01 = norm.match(/\(01\)([^\(\)|]{10,20})/);
+    const m10 = norm.match(/\(10\)([^\(\)|]{1,20})/);
+    const m17 = norm.match(/\(17\)([^\(\)|]{6,8})/);
     if(m01) di  = m01[1].replace(/[^0-9]/g,'').substring(0,14);
-    if(m10) lot = m10[1].replace(/\|/g,'');
+    if(m10) lot = m10[1];
     if(m17) exp = m17[1].replace(/[^0-9]/g,'').substring(0,6);
 
-  // ── 2. 연속형/GS구분자형 ─────────────────────────────
+  // ── 2. 연속형/GS구분자형 → 세그먼트별 AI 추출 ────────
   } else {
-    const clean = norm.replace(/\|/g,'');
-    const idx01 = clean.indexOf('01');
-    if(idx01 >= 0 && clean.length - idx01 >= 16) {
-      di = clean.substring(idx01 + 2, idx01 + 16);
-      let rest = clean.substring(idx01 + 16);
-      // 파이프 버전에서 AI 분리
-      const parts = norm.replace(/\|/g,'|').split('|').filter(Boolean);
-      if(parts.length > 1) {
-        // GS 구분자로 분리된 경우
-        parts.forEach(p => {
-          if(p.startsWith('01') && p.length >= 16) di = p.substring(2,16);
-          else if(p.startsWith('10')) lot = p.substring(2);
-          else if(p.startsWith('17') && p.length >= 8) exp = p.substring(2,8);
-        });
-      } else {
-        // 연속형
-        if(rest.startsWith('10')) {
-          const idx17 = rest.indexOf('17', 2);
-          if(idx17 > 2) { lot = rest.substring(2, idx17); exp = rest.substring(idx17+2, idx17+8); }
-          else lot = rest.substring(2);
-        } else if(rest.startsWith('17') && rest.length >= 8) {
-          exp = rest.substring(2, 8);
-          const r2 = rest.substring(8);
-          if(r2.startsWith('10')) lot = r2.substring(2);
+    // 파이프로 세그먼트 분리
+    const segments = norm.split('|').filter(Boolean);
+    const aiPairs = [];
+
+    // 각 세그먼트에서 모든 AI-값 쌍을 순차 추출
+    for(const seg of segments) {
+      let pos = 0;
+      while(pos < seg.length - 1) {
+        const code2 = seg.substring(pos, pos + 2);
+
+        if(code2 === '01' && seg.length - pos >= 16) {
+          // AI 01: 고정 14자리 GTIN
+          aiPairs.push({ ai:'01', val: seg.substring(pos+2, pos+16) });
+          pos += 16;
+        } else if(code2 === '17' && seg.length - pos >= 8) {
+          // AI 17: 고정 6자리 유효기한
+          aiPairs.push({ ai:'17', val: seg.substring(pos+2, pos+8) });
+          pos += 8;
+        } else if(code2 === '11' && seg.length - pos >= 8) {
+          // AI 11: 고정 6자리 제조일
+          aiPairs.push({ ai:'11', val: seg.substring(pos+2, pos+8) });
+          pos += 8;
+        } else if(code2 === '10') {
+          // AI 10: 가변길이 로트번호
+          const remaining = seg.substring(pos+2);
+          if(segments.length > 1) {
+            // GS 구분자로 이미 분리됨 → 세그먼트 끝까지 안전하게 소비
+            aiPairs.push({ ai:'10', val: remaining });
+            break;
+          } else {
+            // 구분자 없는 연속형 → 뒤에 고정길이 AI(17,11)가 숨어있는지 탐색
+            let lotEnd = remaining.length;
+            for(let k = 1; k < remaining.length - 5; k++) {
+              const nc = remaining.substring(k, k+2);
+              if((nc === '17' || nc === '11') && remaining.length - k >= 8) {
+                // 6자리 숫자 날짜가 이어지면 AI로 판단
+                if(/^\d{6}$/.test(remaining.substring(k+2, k+8))) {
+                  lotEnd = k;
+                  break;
+                }
+              }
+            }
+            aiPairs.push({ ai:'10', val: remaining.substring(0, lotEnd) });
+            pos += 2 + lotEnd;
+            // break 하지 않고 계속 파싱 (뒤에 17 등이 남아있을 수 있음)
+          }
+        } else if(code2 === '21') {
+          // AI 21: 가변길이 시리얼번호
+          aiPairs.push({ ai:'21', val: seg.substring(pos+2) });
+          break;
         } else {
-          const i17 = rest.indexOf('17');
-          const i10 = rest.indexOf('10');
-          if(i17 >= 0 && rest.length >= i17+8) exp = rest.substring(i17+2, i17+8);
-          if(i10 >= 0) lot = rest.substring(i10+2, i17 > i10 ? i17 : rest.length);
+          // 인식 불가 → 1글자 스킵
+          pos++;
         }
       }
-    } else {
-      // UDI 형식 아님 → 수동 입력 유도
-      toast('UDI 코드가 아닙니다. 제품 스티커의 네모난 DataMatrix 코드를 찾아주세요.', 'warn');
-      showResultBox({di:'',lot:'',exp:'',name:'인식 실패 — 직접 입력하세요',model:''});
-      return;
+    }
+
+    // 추출된 AI 값 할당
+    for(const { ai, val } of aiPairs) {
+      if(ai === '01') di  = val;
+      else if(ai === '10') lot = val;
+      else if(ai === '17') exp = val;
     }
   }
 
-  // DI 정제
+  // UDI 형식 아닌 경우
+  if(!di) {
+    toast('UDI 코드가 아닙니다. 제품 스티커의 네모난 DataMatrix 코드를 찾아주세요.', 'warn');
+    showResultBox({di:'',lot:'',exp:'',name:'인식 실패 — 직접 입력하세요',model:''});
+    return;
+  }
+
+  // 정제
   di = di.replace(/[^0-9]/g,'');
-  if(di && di.length < 14) di = di.padStart(14, '0');
-  if(di && di.length > 14) di = di.substring(0, 14);
+  if(di.length < 14) di = di.padStart(14, '0');
+  if(di.length > 14) di = di.substring(0, 14);
   lot = lot.replace(/[^a-zA-Z0-9\-]/g,'');
   exp = exp.replace(/[^0-9]/g,'');
 
