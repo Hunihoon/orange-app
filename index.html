@@ -219,7 +219,7 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
 .edit-row{background:rgba(255,90,31,.05);border-left:2px solid var(--or);}
 
 /* 스캐너 커스텀 스타일 */
-#barcode-video-container { background:#111; border-radius:var(--r); }
+#barcode-video-container { background:#111; border-radius:var(--r); position:relative; }
 #barcode-video-container video { width:100% !important; max-height:320px !important; object-fit:cover !important; display:block !important; }
 #barcode-video-container > div { border-radius:var(--r); }
 #qr-shaded-region { border-width:0 !important; }
@@ -228,6 +228,27 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
 #barcode-video-container select { display:none !important; }
 #barcode-video-container img[alt="Info icon"] { display:none !important; }
 #barcode-video-container br { display:none !important; }
+
+/* 조준 오버레이 */
+.scan-aim{position:absolute;inset:0;pointer-events:none;z-index:5;}
+.scan-aim-box{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;}
+.scan-aim-corner{position:absolute;width:30px;height:30px;border-color:#22C55E;border-style:solid;border-width:0;}
+.scan-aim-corner.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-top-left-radius:8px;}
+.scan-aim-corner.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-top-right-radius:8px;}
+.scan-aim-corner.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-bottom-left-radius:8px;}
+.scan-aim-corner.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-bottom-right-radius:8px;}
+.scan-aim-line{position:absolute;left:15%;width:70%;height:2px;background:linear-gradient(90deg,transparent,#22C55E 30%,#22C55E 70%,transparent);top:50%;animation:aimSweep 2.2s ease-in-out infinite;}
+@keyframes aimSweep{0%,100%{top:25%;opacity:.4}50%{top:75%;opacity:1}}
+.scan-aim-cross-h{position:absolute;top:50%;left:25%;width:50%;height:1px;background:rgba(34,197,94,.25);}
+.scan-aim-cross-v{position:absolute;left:50%;top:25%;width:1px;height:50%;background:rgba(34,197,94,.25);}
+.scan-aim-dim{position:absolute;inset:0;background:radial-gradient(ellipse 220px 220px at center,transparent 45%,rgba(0,0,0,.55) 100%);z-index:4;pointer-events:none;}
+.scan-aim-found .scan-aim-corner{border-color:#fff;animation:aimPulse .25s ease 3;}
+@keyframes aimPulse{50%{border-color:#22C55E}}
+
+/* 인식결과 수동편집 인풋 */
+.rvl-input{font-weight:500;font-family:'JetBrains Mono';font-size:12px;text-align:right;max-width:62%;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:5px 8px;color:var(--t1);outline:none;width:100%;}
+.rvl-input:focus{border-color:var(--or);}
+.rvl-input::placeholder{color:var(--t3);font-size:10px;font-weight:400;}
 
 /* 부자재 */
 .sub-group{margin-bottom:10px;}
@@ -322,6 +343,19 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
     <div id="barcode-wrap" style="display:none;border-radius:var(--r);margin-bottom:10px;position:relative;background:#111;min-height:260px;">
       <!-- 카메라가 여기에 렌더링 -->
       <div id="barcode-video-container" style="width:100%;min-height:260px;"></div>
+      <!-- 조준 오버레이 -->
+      <div class="scan-aim-dim"></div>
+      <div class="scan-aim" id="scan-aim-overlay">
+        <div class="scan-aim-box" id="scan-aim-box">
+          <div class="scan-aim-corner tl"></div>
+          <div class="scan-aim-corner tr"></div>
+          <div class="scan-aim-corner bl"></div>
+          <div class="scan-aim-corner br"></div>
+          <div class="scan-aim-line"></div>
+          <div class="scan-aim-cross-h"></div>
+          <div class="scan-aim-cross-v"></div>
+        </div>
+      </div>
       <div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;pointer-events:none;z-index:10;">
         <span style="background:rgba(0,0,0,0.7);color:rgba(255,255,255,0.9);font-size:11px;padding:4px 14px;border-radius:20px;">
           DataMatrix 코드를 초록 박스 안에 맞추세요
@@ -349,16 +383,17 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
     </div>
 
     <div class="result-box" id="result-box">
-      <div class="card-t" style="margin-bottom:8px">인식 결과</div>
-      <div class="rf"><span class="rlb">(01) UDI-DI</span><span class="rvl mono" id="r-di">-</span></div>
-      <div class="rf"><span class="rlb">(10) 로트번호</span><span class="rvl mono" id="r-lot">-</span></div>
-      <div class="rf"><span class="rlb">(17) 유효기간</span><span class="rvl mono" id="r-exp">-</span></div>
+      <div class="card-t" style="margin-bottom:8px">인식 결과 <span style="font-size:10px;color:var(--t3);font-weight:400;margin-left:4px">— 직접 수정 가능</span></div>
+      <div class="rf"><span class="rlb">(01) UDI-DI</span><input class="rvl-input" id="r-di" placeholder="14자리 DI 입력" oninput="onEditDI(this.value)"></div>
+      <div class="rf"><span class="rlb">(10) 로트번호</span><input class="rvl-input" id="r-lot" placeholder="로트번호 입력"></div>
+      <div class="rf"><span class="rlb">(17) 유효기간</span><input class="rvl-input" id="r-exp" type="date" placeholder="YYYY-MM-DD"></div>
       <div class="rf"><span class="rlb">제품명</span><span class="rvl" id="r-name">-</span></div>
       <div class="rf"><span class="rlb">모델명</span><span class="rvl mono" id="r-model">-</span></div>
       <div class="rf" id="r-exp-warn-row" style="display:none">
         <span class="rlb">⚠ 유효기간 경고</span>
         <span class="rvl red" id="r-exp-warn">-</span>
       </div>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="applyManualResult()">✏️ 수동 입력 적용</button>
     </div>
   </div>
 
@@ -732,9 +767,9 @@ function selectQuick(idx) {
   setMode(mode);
   toast(`${p.name.split(' ')[0]} 선택됨 — 로트번호·유효기간을 입력해주세요`, 'ok');
   // show simplified result
-  document.getElementById('r-di').textContent = p.di || '-';
-  document.getElementById('r-lot').textContent = '아래에 직접 입력';
-  document.getElementById('r-exp').textContent = '-';
+  document.getElementById('r-di').value = p.di || '';
+  document.getElementById('r-lot').value = '';
+  document.getElementById('r-exp').value = '';
   document.getElementById('r-name').textContent = p.name;
   document.getElementById('r-name').className = 'rvl match';
   document.getElementById('r-model').textContent = p.model;
@@ -828,15 +863,29 @@ async function startBarcodeScanner() {
       const detector = new BarcodeDetector({
         formats: ['data_matrix','qr_code','code_128','code_39','ean_13']
       });
+      let confirmCount = 0;
+      let lastRaw = '';
       const bdScan = async () => {
         if(!scanActive) return;
         try {
           const barcodes = await detector.detect(scanVideoEl);
           if(barcodes.length > 0) {
             const raw = barcodes[0].rawValue;
-            await stopBarcodeScanner();
-            parseGS1(raw);
-            return;
+            // 같은 코드 2회 연속 확인 → 오인식 방지
+            if(raw === lastRaw) { confirmCount++; } else { lastRaw = raw; confirmCount = 1; }
+            if(confirmCount >= 2) {
+              // 조준 성공 시각 피드백
+              status.textContent = '✅ 코드 감지 완료! 처리 중...';
+              const aimBox = document.getElementById('scan-aim-box');
+              if(aimBox) aimBox.parentElement.classList.add('scan-aim-found');
+              // 1.2초 딜레이 → 사용자가 결과를 확인할 수 있게
+              await new Promise(r => setTimeout(r, 1200));
+              await stopBarcodeScanner();
+              parseGS1(raw);
+              return;
+            } else {
+              status.textContent = '🔍 코드 감지 중... 잠시 유지해주세요';
+            }
           }
         } catch(e) {}
         if(scanActive) scanTimer = requestAnimationFrame(bdScan);
@@ -908,32 +957,64 @@ async function stopBarcodeScanner() {
 async function ocrScanImage(b64, mime) {
   showLoading('Tesseract OCR로 텍스트 인식 중...');
   try {
-    // Tesseract OCR
     if(typeof Tesseract === 'undefined') {
       hideLoading();
       toast('OCR 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warn');
       return;
     }
     const imgSrc = 'data:' + mime + ';base64,' + b64;
-    const result = await Tesseract.recognize(imgSrc, 'eng', {
-      logger: () => {}
-    });
-    const text = result.data.text;
+
+    // 이미지 전처리: 그레이스케일 + 대비 향상
+    let enhancedSrc = imgSrc;
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload=res; img.onerror=rej; img.src=imgSrc; });
+      const cv = document.createElement('canvas');
+      cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const id = ctx.getImageData(0, 0, cv.width, cv.height);
+      const d = id.data;
+      for(let i=0; i<d.length; i+=4) {
+        const g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+        const e = g < 128 ? Math.max(0, g*0.5) : Math.min(255, g*1.4+40);
+        d[i] = d[i+1] = d[i+2] = e;
+      }
+      ctx.putImageData(id, 0, 0);
+      enhancedSrc = cv.toDataURL('image/png');
+    } catch(pe) { /* 전처리 실패시 원본 사용 */ }
+
+    // 1차: 전처리 이미지로 OCR
+    const result1 = await Tesseract.recognize(enhancedSrc, 'eng', { logger:()=>{} });
+    let parsed = parseTextUDI(result1.data.text);
+
+    // 2차: 1차 실패시 원본으로 재시도
+    if(!parsed.di && !parsed.lot) {
+      const result2 = await Tesseract.recognize(imgSrc, 'eng', { logger:()=>{} });
+      const parsed2 = parseTextUDI(result2.data.text);
+      if(parsed2.di || parsed2.lot) parsed = parsed2;
+      // 3차: 두 결과 합쳐서 시도
+      if(!parsed.di && !parsed.lot) {
+        const combined = (result1.data.text||'') + ' ' + (result2.data.text||'');
+        const parsed3 = parseTextUDI(combined);
+        if(parsed3.di || parsed3.lot) parsed = parsed3;
+      }
+    }
+
     hideLoading();
 
-    // (01) (10) (17) 패턴 파싱
-    const parsed = parseTextUDI(text);
     if(parsed.di || parsed.lot || parsed.exp) {
       const prod = matchProduct(parsed.di);
       showResultBox({ di:parsed.di, lot:parsed.lot, exp:fmtExp(parsed.exp), ...prod });
       toast('✅ 텍스트 인식 성공!', 'ok');
     } else {
-      toast('UDI 코드를 찾지 못했습니다. 스티커 숫자 부분이 잘 보이도록 찍어주세요.', 'err');
-      showResultBox({di:'',lot:'',exp:'',name:'인식 실패',model:''});
+      toast('자동 인식 실패 — 아래 결과창에서 직접 입력해주세요.', 'warn');
+      showResultBox({di:'',lot:'',exp:'',name:'인식 실패 — 직접 입력하세요',model:''});
     }
   } catch(e) {
     hideLoading();
-    toast('인식 오류: ' + e.message, 'err');
+    toast('인식 오류: ' + e.message + ' — 아래에서 직접 입력하세요', 'err');
+    showResultBox({di:'',lot:'',exp:'',name:'오류 — 직접 입력하세요',model:''});
   }
 }
 
@@ -947,29 +1028,65 @@ function dataURLtoFile(dataurl, filename) {
   return new File([u8arr], filename, { type: mime });
 }
 
-// 텍스트에서 UDI 파싱 (OCR 결과용)
+// 텍스트에서 UDI 파싱 (OCR 결과용) — 개선판
 function parseTextUDI(text) {
   if(!text) return {};
-  const norm = text.replace(/\r?\n/g,' ').replace(/[Oo]/g,'0').replace(/[Il|]/g,'1');
-  const m01 = norm.match(/\(01\)\s*([\d\s]{10,20})/);
-  const m10 = norm.match(/\(10\)\s*([\d\w]+)/);
-  const m17 = norm.match(/\(17\)\s*([\d\s]{6,8})/);
+  // 줄바꿈→공백, 전처리
+  let norm = text.replace(/\r?\n/g, ' ');
+
+  // ── A. 괄호 패턴 먼저 시도 (공백·OCR오류 허용) ─────────
+  // OCR이 괄호를 잘못 읽는 경우: {01}, [01], (O1) 등 보정
+  let bNorm = norm
+    .replace(/[\{\[]/g, '(').replace(/[\}\]]/g, ')')
+    .replace(/\(O/gi, '(0').replace(/l\)/g, '1)').replace(/I\)/g, '1)');
+  // (01) 다음에 공백+숫자들 (14자리까지)
+  const m01 = bNorm.match(/\(01\)\s*([0-9 ]{10,28})/);
+  const m10 = bNorm.match(/\(10\)\s*([0-9A-Za-z \-]{1,20})/);
+  const m17 = bNorm.match(/\(17\)\s*([0-9 ]{6,14})/);
   if(m01) {
-    return {
-      di:  m01[1].replace(/\s/g,'').substring(0,14).padStart(14,'0'),
-      lot: m10 ? m10[1].trim() : '',
-      exp: m17 ? m17[1].replace(/\s/g,'').substring(0,6) : ''
-    };
+    const di = m01[1].replace(/\s/g,'').replace(/[^0-9]/g,'').substring(0,14).padStart(14,'0');
+    const lot = m10 ? m10[1].replace(/\s/g,'').trim() : '';
+    const exp = m17 ? m17[1].replace(/\s/g,'').replace(/[^0-9]/g,'').substring(0,6) : '';
+    return { di, lot, exp };
   }
-  const clean = norm.replace(/\s/g,'');
-  const i = clean.indexOf('01');
-  if(i>=0 && clean.length-i>=16) {
-    const sub = clean.substring(i);
-    const di = sub.substring(2,16);
-    let rest=sub.substring(16), lot='', exp='';
-    if(rest.startsWith('10')){const i17=rest.indexOf('17',2);if(i17>2){lot=rest.substring(2,i17);exp=rest.substring(i17+2,i17+8);}else lot=rest.substring(2);}
-    else if(rest.startsWith('17')){exp=rest.substring(2,8);const r2=rest.substring(8);if(r2.startsWith('10'))lot=r2.substring(2);}
-    return {di:di.padStart(14,'0'),lot,exp};
+
+  // ── B. 숫자만 추출 후 연속 패턴 시도 ──────────────────
+  // 모든 O→0, I/l/|→1 보정
+  const fixed = norm.replace(/[Oo]/g,'0').replace(/[Il|]/g,'1');
+  const allClean = fixed.replace(/[^0-9a-zA-Z]/g,'');
+  const i01 = allClean.indexOf('01');
+  if(i01 >= 0 && allClean.length - i01 >= 16) {
+    const sub = allClean.substring(i01);
+    const di = sub.substring(2,16).replace(/[^0-9]/g,'');
+    let rest = sub.substring(16), lot = '', exp = '';
+    if(rest.startsWith('10')) {
+      const j17 = rest.indexOf('17', 2);
+      if(j17 > 2) { lot = rest.substring(2, j17); exp = rest.substring(j17+2, j17+8); }
+      else lot = rest.substring(2);
+    } else if(rest.startsWith('17')) {
+      exp = rest.substring(2, 8);
+      const r2 = rest.substring(8);
+      if(r2.startsWith('10')) lot = r2.substring(2);
+    } else {
+      const j17 = rest.indexOf('17');
+      const j10 = rest.indexOf('10');
+      if(j17 >= 0) exp = rest.substring(j17+2, j17+8);
+      if(j10 >= 0) lot = rest.substring(j10+2, j17 > j10 ? j17 : undefined);
+    }
+    return { di: di.padStart(14,'0'), lot: lot.replace(/[^a-zA-Z0-9]/g,''), exp: exp.replace(/[^0-9]/g,'') };
+  }
+
+  // ── C. 088 패턴 직접 탐색 (DI가 088으로 시작하는 오렌지메딕스 제품) ──
+  const digits = norm.replace(/[^0-9\s]/g, '');
+  const m088 = digits.match(/0\s*8\s*8\s*0\s*0\s*2\s*1\s*1\s*8\s*0\s*0[\d\s]{3,10}/);
+  if(m088) {
+    const di = m088[0].replace(/\s/g,'').substring(0,14).padStart(14,'0');
+    const afterIdx = digits.indexOf(m088[0]) + m088[0].length;
+    const afterDigits = digits.substring(afterIdx).replace(/\s/g,'');
+    let lot = '', exp = '';
+    if(afterDigits.length >= 6) lot = afterDigits.substring(0,6);
+    if(afterDigits.length >= 12) exp = afterDigits.substring(6,12);
+    return { di, lot, exp };
   }
   return {};
 }
@@ -979,60 +1096,72 @@ function parseTextUDI(text) {
 //   괄호형: (01)08800211800022(10)250609(17)280610
 //   연속형: 01088002118000221025060917280610
 //   공백형: (01) 0 8800 2118 00022 (10) 250609 (17) 280610
+//   GS구분자형: 01....\x1D10....\x1D17....
 function parseGS1(raw) {
   if(!raw) { toast('코드를 읽지 못했습니다', 'err'); return; }
 
   let di = '', lot = '', exp = '';
 
-  // ── 1. 공백 제거 후 처리 ──────────────────────────────
-  const clean = raw.replace(/\s/g, '');
+  // GS 구분자(ASCII 29, 30)를 파이프로 변환 후 공백 전체 제거
+  let norm = raw.replace(/[\x1D\x1E]/g, '|').replace(/\s+/g, '');
 
-  // ── 2. 괄호형 파싱 (01)...(10)...(17)... ──────────────
-  const hasBracket = clean.includes('(01)') || clean.includes('(10)') || clean.includes('(17)');
+  // ── 1. 괄호형 (01)...(10)...(17)... ──────────────────
+  const hasBracket = norm.includes('(01)') || norm.includes('(10)') || norm.includes('(17)');
   if(hasBracket) {
-    const m01 = clean.match(/\(01\)([\d]{10,14})/);
-    const m10 = clean.match(/\(10\)([^\(]{1,20})/);
-    const m17 = clean.match(/\(17\)([\d]{6})/);
-    if(m01) di  = m01[1].padStart(14,'0');
-    if(m10) lot = m10[1];
-    if(m17) exp = m17[1];
+    const m01 = norm.match(/\(01\)([^\(\|]{10,20})/);
+    const m10 = norm.match(/\(10\)([^\(\|]{1,20})/);
+    const m17 = norm.match(/\(17\)([^\(\|]{6,8})/);
+    if(m01) di  = m01[1].replace(/[^0-9]/g,'').substring(0,14);
+    if(m10) lot = m10[1].replace(/\|/g,'');
+    if(m17) exp = m17[1].replace(/[^0-9]/g,'').substring(0,6);
 
-  // ── 3. 연속형 파싱 01{14자리}...  ─────────────────────
-  } else if(clean.startsWith('01') && clean.length >= 16) {
-    di = clean.substring(2, 16);
-    let rest = clean.substring(16);
-
-    // 순서 A: 10(로트)...17(날짜)
-    if(rest.startsWith('10')) {
-      const idx17 = rest.indexOf('17', 2);
-      if(idx17 > 2) {
-        lot = rest.substring(2, idx17);
-        exp = rest.substring(idx17 + 2, idx17 + 8);
-      } else {
-        lot = rest.substring(2);
-      }
-    }
-    // 순서 B: 17(날짜)10(로트)
-    else if(rest.startsWith('17') && rest.length >= 8) {
-      exp = rest.substring(2, 8);
-      const rest2 = rest.substring(8);
-      if(rest2.startsWith('10')) lot = rest2.substring(2);
-    }
-    // 순서 C: 중간에 17 있는 경우
-    else {
-      const i17 = rest.indexOf('17');
-      const i10 = rest.indexOf('10');
-      if(i17 >= 0 && rest.length >= i17 + 8) exp = rest.substring(i17+2, i17+8);
-      if(i10 >= 0) lot = rest.substring(i10+2, i17 > i10 ? i17 : rest.length);
-    }
+  // ── 2. 연속형/GS구분자형 ─────────────────────────────
   } else {
-    // 인식됐지만 UDI 형식 아닌 경우
-    toast('UDI 코드가 아닙니다. 제품 스티커의 네모난 DataMatrix 코드를 찾아주세요.', 'warn');
-    return;
+    const clean = norm.replace(/\|/g,'');
+    const idx01 = clean.indexOf('01');
+    if(idx01 >= 0 && clean.length - idx01 >= 16) {
+      di = clean.substring(idx01 + 2, idx01 + 16);
+      let rest = clean.substring(idx01 + 16);
+      // 파이프 버전에서 AI 분리
+      const parts = norm.replace(/\|/g,'|').split('|').filter(Boolean);
+      if(parts.length > 1) {
+        // GS 구분자로 분리된 경우
+        parts.forEach(p => {
+          if(p.startsWith('01') && p.length >= 16) di = p.substring(2,16);
+          else if(p.startsWith('10')) lot = p.substring(2);
+          else if(p.startsWith('17') && p.length >= 8) exp = p.substring(2,8);
+        });
+      } else {
+        // 연속형
+        if(rest.startsWith('10')) {
+          const idx17 = rest.indexOf('17', 2);
+          if(idx17 > 2) { lot = rest.substring(2, idx17); exp = rest.substring(idx17+2, idx17+8); }
+          else lot = rest.substring(2);
+        } else if(rest.startsWith('17') && rest.length >= 8) {
+          exp = rest.substring(2, 8);
+          const r2 = rest.substring(8);
+          if(r2.startsWith('10')) lot = r2.substring(2);
+        } else {
+          const i17 = rest.indexOf('17');
+          const i10 = rest.indexOf('10');
+          if(i17 >= 0 && rest.length >= i17+8) exp = rest.substring(i17+2, i17+8);
+          if(i10 >= 0) lot = rest.substring(i10+2, i17 > i10 ? i17 : rest.length);
+        }
+      }
+    } else {
+      // UDI 형식 아님 → 수동 입력 유도
+      toast('UDI 코드가 아닙니다. 제품 스티커의 네모난 DataMatrix 코드를 찾아주세요.', 'warn');
+      showResultBox({di:'',lot:'',exp:'',name:'인식 실패 — 직접 입력하세요',model:''});
+      return;
+    }
   }
 
-  // DI 14자리 보정
+  // DI 정제
+  di = di.replace(/[^0-9]/g,'');
   if(di && di.length < 14) di = di.padStart(14, '0');
+  if(di && di.length > 14) di = di.substring(0, 14);
+  lot = lot.replace(/[^a-zA-Z0-9\-]/g,'');
+  exp = exp.replace(/[^0-9]/g,'');
 
   const prod = matchProduct(di);
   showResultBox({ di, lot, exp: fmtExp(exp), ...prod });
@@ -1071,9 +1200,9 @@ JSON만 응답: {"di":"14자리","lot":"로트번호","exp":"YYMMDD"}`;
       const prod = matchProduct(p.di||'');
       showResultBox({di:p.di||'',lot:p.lot||'',exp:fmtExp(p.exp||''),...prod});
     } else {
-      showResultBox({di:'',lot:'',exp:'',name:'인식 실패',model:''}); toast('UDI 인식 실패. 더 선명하게 찍어주세요', 'err');
+      showResultBox({di:'',lot:'',exp:'',name:'인식 실패 — 직접 입력하세요',model:''}); toast('UDI 인식 실패. 더 선명하게 찍거나 직접 입력하세요', 'err');
     }
-  } catch(e) { toast('오류: '+e.message, 'err'); showResultBox({di:'',lot:'',exp:'',name:'오류',model:''}); }
+  } catch(e) { toast('오류: '+e.message, 'err'); showResultBox({di:'',lot:'',exp:'',name:'오류 — 직접 입력하세요',model:''}); }
   finally { hideLoading(); }
 }
 
@@ -1091,12 +1220,12 @@ function matchProduct(di) {
 
 function showResultBox(d) {
   currentScan = d;
-  document.getElementById('r-di').textContent = d.di||'-';
-  document.getElementById('r-lot').textContent = d.lot||'-';
-  document.getElementById('r-exp').textContent = d.exp||'-';
+  document.getElementById('r-di').value = d.di||'';
+  document.getElementById('r-lot').value = d.lot||'';
+  document.getElementById('r-exp').value = d.exp||'';
   const nameEl = document.getElementById('r-name');
   nameEl.textContent = d.name||'-';
-  nameEl.className = 'rvl ' + (d.name && !['미등록 제품','인식 실패','오류','API 키 없음',''].includes(d.name) ? 'match' : 'warn');
+  nameEl.className = 'rvl ' + (d.name && !['미등록 제품','인식 실패','인식 실패 — 직접 입력하세요','오류','오류 — 직접 입력하세요','API 키 없음',''].includes(d.name) ? 'match' : 'warn');
   document.getElementById('r-model').textContent = d.model||'-';
 
   // Expiry warning
@@ -1121,6 +1250,35 @@ function showResultBox(d) {
   else document.getElementById('f-exp').value = '';
   renderDestSelect();
   setMode(mode);
+}
+
+// ─── 수동 편집 기능 ──────────────────────────────────────
+function onEditDI(val) {
+  const cleaned = val.replace(/\s/g,'').replace(/[^0-9]/g,'');
+  if(cleaned.length >= 10) {
+    const prod = matchProduct(cleaned.padStart(14,'0'));
+    document.getElementById('r-name').textContent = prod.name || '-';
+    document.getElementById('r-name').className = 'rvl ' + (prod.name && prod.name !== '미등록 제품' ? 'match' : 'warn');
+    document.getElementById('r-model').textContent = prod.model || '-';
+  }
+}
+
+function applyManualResult() {
+  const diRaw = (document.getElementById('r-di').value||'').replace(/\s/g,'').replace(/[^0-9]/g,'');
+  const lot = (document.getElementById('r-lot').value||'').trim();
+  const exp = document.getElementById('r-exp').value||'';
+  if(!diRaw && !lot) { toast('UDI-DI 또는 로트번호를 입력해주세요','err'); return; }
+  const di = diRaw ? diRaw.padStart(14,'0') : '';
+  const prod = matchProduct(di);
+  currentScan = { di, lot, exp, name: prod.name||currentScan.name||'', model: prod.model||currentScan.model||'' };
+  document.getElementById('f-lot').value = lot;
+  if(exp) document.getElementById('f-exp').value = exp;
+  document.getElementById('r-name').textContent = currentScan.name || '-';
+  document.getElementById('r-name').className = 'rvl ' + (currentScan.name && !['미등록 제품','인식 실패','인식 실패 — 직접 입력하세요','오류','오류 — 직접 입력하세요',''].includes(currentScan.name) ? 'match' : 'warn');
+  document.getElementById('r-model').textContent = currentScan.model || '-';
+  document.getElementById('entry-form').style.display = 'block';
+  renderDestSelect(); setMode(mode);
+  toast('✅ 수동 입력 적용됨','ok');
 }
 
 // ─── SUBMIT ───────────────────────────────────────────────
