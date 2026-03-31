@@ -9,7 +9,6 @@
 <meta name="theme-color" content="#FF5A1F">
 <title>오렌지메딕스 재고관리</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -219,14 +218,16 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
 /* INLINE ROW EDIT */
 .edit-row{background:rgba(255,90,31,.05);border-left:2px solid var(--or);}
 
-/* html5-qrcode 스캐너 커스텀 스타일 */
-#barcode-video-container { border-radius: var(--r); overflow: hidden; background: #000; }
-#barcode-video-container video { width: 100% !important; max-height: 300px !important; object-fit: cover !important; }
-#qr-shaded-region { border-width: 0 !important; }
-#barcode-video-container > div > div { border: 3px solid #22C55E !important; border-radius: 10px !important; box-shadow: 0 0 0 2000px rgba(0,0,0,0.5) !important; }
-#barcode-video-container span { display: none !important; }
-#barcode-video-container select { display: none !important; }
-#barcode-video-container img { display: none !important; }
+/* 스캐너 커스텀 스타일 */
+#barcode-video-container { background:#111; border-radius:var(--r); }
+#barcode-video-container video { width:100% !important; max-height:320px !important; object-fit:cover !important; display:block !important; }
+#barcode-video-container > div { border-radius:var(--r); }
+#qr-shaded-region { border-width:0 !important; }
+#barcode-video-container #qr-shaded-region div { border:3px solid #22C55E !important; border-radius:10px !important; }
+#barcode-video-container p { display:none !important; }
+#barcode-video-container select { display:none !important; }
+#barcode-video-container img[alt="Info icon"] { display:none !important; }
+#barcode-video-container br { display:none !important; }
 
 /* 부자재 */
 .sub-group{margin-bottom:10px;}
@@ -318,15 +319,15 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
     <div class="card-t">UDI 바코드 스캔</div>
 
     <!-- 바코드 실시간 스캔 뷰어 -->
-    <div id="barcode-wrap" style="display:none;border-radius:var(--r);overflow:hidden;margin-bottom:10px;position:relative;">
-      <!-- html5-qrcode가 여기에 카메라를 렌더링 -->
-      <div id="barcode-video-container" style="width:100%;"></div>
-      <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;pointer-events:none;z-index:5;">
-        <span style="background:rgba(0,0,0,0.65);color:rgba(255,255,255,0.9);font-size:11px;padding:4px 12px;border-radius:20px;">
+    <div id="barcode-wrap" style="display:none;border-radius:var(--r);margin-bottom:10px;position:relative;background:#111;min-height:260px;">
+      <!-- 카메라가 여기에 렌더링 -->
+      <div id="barcode-video-container" style="width:100%;min-height:260px;"></div>
+      <div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;pointer-events:none;z-index:10;">
+        <span style="background:rgba(0,0,0,0.7);color:rgba(255,255,255,0.9);font-size:11px;padding:4px 14px;border-radius:20px;">
           DataMatrix 코드를 초록 박스 안에 맞추세요
         </span>
       </div>
-      <button onclick="stopBarcodeScanner()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:15px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;">✕</button>
+      <button onclick="stopBarcodeScanner()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:15px;cursor:pointer;z-index:20;display:flex;align-items:center;justify-content:center;">✕</button>
     </div>
 
     <!-- 스캔 버튼들 -->
@@ -682,6 +683,8 @@ function switchTab(id) {
     document.getElementById('tab-'+t).classList.toggle('active', t===id);
   });
   document.getElementById('scroll-area').scrollTop = 0;
+  // 스캔 탭 벗어나면 카메라 자동 종료
+  if(id !== 'scan' && scanActive) stopBarcodeScanner();
   if(id==='history') renderHistory();
   if(id==='stock') { renderStock(); renderSafetyWarnings(); if(activeStockTab==='sub') renderSubStock(); }
   if(id==='settings') { renderDestTags(); renderProductsTable(); renderSafetyStockList(); }
@@ -774,80 +777,126 @@ function clearPreview() {
 }
 
 // ─── CLAUDE API ───────────────────────────────────────────
-// ─── BARCODE SCANNER (html5-qrcode) ────────────────────────
-let html5QrScanner = null;
+// ─── BARCODE SCANNER ────────────────────────────────────────
+// 전략: getUserMedia로 카메라 직접 열기
+//       → BarcodeDetector (브라우저 내장, DataMatrix 지원)
+//       → 3초마다 canvas 캡처 → Tesseract OCR 폴백
+let scanStream    = null;
+let scanVideoEl   = null;
+let scanTimer     = null;
+let scanOcrTimer  = null;
+let scanActive    = false;
 
 async function startBarcodeScanner() {
-  const wrap = document.getElementById('barcode-wrap');
-  const btn  = document.getElementById('barcode-scan-btn');
+  const btn    = document.getElementById('barcode-scan-btn');
+  const wrap   = document.getElementById('barcode-wrap');
   const status = document.getElementById('scan-status');
 
-  if(typeof Html5Qrcode === 'undefined') {
-    toast('스캔 라이브러리 로딩 중... 잠시 후 다시 시도해주세요', 'warn');
-    return;
-  }
+  if(scanActive) { await stopBarcodeScanner(); return; }
 
-  // 이미 실행 중이면 중지
-  if(html5QrScanner) { stopBarcodeScanner(); return; }
-
-  wrap.style.display = 'block';
+  // UI
+  wrap.style.display   = 'block';
   status.style.display = 'block';
-  status.textContent = '🔍 스캔 중...';
+  status.textContent   = '🔍 카메라 시작 중...';
   btn.innerHTML = '⏹ 스캔 중지';
-  btn.onclick = stopBarcodeScanner;
+  btn.onclick   = stopBarcodeScanner;
 
   try {
-    html5QrScanner = new Html5Qrcode('barcode-video-container', { verbose: false });
-    const config = {
-      fps: 15,
-      qrbox: (viewfinderWidth, viewfinderHeight) => {
-        // 뷰파인더의 85% 너비, 높이는 너비의 55%
-        const w = Math.floor(viewfinderWidth * 0.85);
-        const h = Math.floor(w * 0.55);
-        return { width: w, height: h };
-      },
-      aspectRatio: 1.6,
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.DATA_MATRIX,
-        Html5QrcodeSupportedFormats.QR_CODE,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.EAN_13,
-      ],
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-    };
+    // 1. 카메라 스트림 열기
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width:{ideal:1280}, height:{ideal:720} }
+    });
 
-    await html5QrScanner.start(
-      { facingMode: 'environment' },
-      config,
-      (decodedText) => {
-        stopBarcodeScanner();
-        parseGS1(decodedText);
-      },
-      () => {} // 인식 실패 시 무시 (계속 시도)
-    );
-  } catch(e) {
-    stopBarcodeScanner();
-    if(e.toString().includes('permission')) {
-      toast('카메라 권한이 필요합니다. 브라우저 설정에서 허용해주세요.', 'err');
+    // 2. video 엘리먼트 생성 + 컨테이너에 삽입
+    const container = document.getElementById('barcode-video-container');
+    container.innerHTML = '';
+    scanVideoEl = document.createElement('video');
+    scanVideoEl.srcObject = scanStream;
+    scanVideoEl.setAttribute('playsinline', '');
+    scanVideoEl.setAttribute('muted', '');
+    scanVideoEl.style.cssText = 'width:100%;max-height:300px;object-fit:cover;display:block;border-radius:10px;';
+    container.appendChild(scanVideoEl);
+    await scanVideoEl.play();
+    scanActive = true;
+    status.textContent = '🔍 스캔 중... (코드를 박스 안에 맞추세요)';
+
+    // 3. BarcodeDetector 지원 여부 확인
+    const hasBD = ('BarcodeDetector' in window);
+
+    if(hasBD) {
+      // BarcodeDetector: DataMatrix + QR + Code128 지원 (Android Chrome)
+      const detector = new BarcodeDetector({
+        formats: ['data_matrix','qr_code','code_128','code_39','ean_13']
+      });
+      const bdScan = async () => {
+        if(!scanActive) return;
+        try {
+          const barcodes = await detector.detect(scanVideoEl);
+          if(barcodes.length > 0) {
+            const raw = barcodes[0].rawValue;
+            await stopBarcodeScanner();
+            parseGS1(raw);
+            return;
+          }
+        } catch(e) {}
+        if(scanActive) scanTimer = requestAnimationFrame(bdScan);
+      };
+      scanTimer = requestAnimationFrame(bdScan);
     } else {
-      toast('카메라 시작 오류: ' + e, 'err');
+      // BarcodeDetector 없으면: 3초마다 canvas 캡처 → Tesseract OCR
+      status.textContent = '🔍 OCR 스캔 중... (잠시 기다려주세요)';
+      const ocrScan = async () => {
+        if(!scanActive) return;
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width  = scanVideoEl.videoWidth  || 640;
+          canvas.height = scanVideoEl.videoHeight || 480;
+          canvas.getContext('2d').drawImage(scanVideoEl, 0, 0);
+          const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+          const url  = URL.createObjectURL(blob);
+          if(typeof Tesseract !== 'undefined') {
+            const result = await Tesseract.recognize(url, 'eng', { logger: ()=>{} });
+            URL.revokeObjectURL(url);
+            const parsed = parseTextUDI(result.data.text);
+            if(parsed.di && parsed.di.length === 14) {
+              await stopBarcodeScanner();
+              const prod = matchProduct(parsed.di);
+              showResultBox({di:parsed.di, lot:parsed.lot, exp:fmtExp(parsed.exp), ...prod});
+              toast('✅ OCR 인식 성공!', 'ok');
+              return;
+            }
+          }
+        } catch(e) {}
+        if(scanActive) scanOcrTimer = setTimeout(ocrScan, 2500);
+      };
+      scanOcrTimer = setTimeout(ocrScan, 1500);
+    }
+  } catch(e) {
+    await stopBarcodeScanner();
+    const msg = String(e);
+    if(msg.includes('NotAllowed') || msg.includes('Permission')) {
+      toast('카메라 권한을 허용해주세요. 주소창 왼쪽 🔒 아이콘 → 카메라 허용', 'err');
+    } else if(msg.includes('NotFound')) {
+      toast('카메라를 찾을 수 없습니다.', 'err');
+    } else {
+      toast('카메라 오류: ' + msg.substring(0,50), 'err');
     }
   }
 }
 
 async function stopBarcodeScanner() {
-  if(html5QrScanner) {
-    try {
-      await html5QrScanner.stop();
-      html5QrScanner.clear();
-    } catch(e) {}
-    html5QrScanner = null;
-  }
-  const wrap = document.getElementById('barcode-wrap');
+  scanActive = false;
+  if(scanTimer)    { cancelAnimationFrame(scanTimer); scanTimer = null; }
+  if(scanOcrTimer) { clearTimeout(scanOcrTimer); scanOcrTimer = null; }
+  if(scanStream)   { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  scanVideoEl = null;
+
+  const container = document.getElementById('barcode-video-container');
+  if(container) container.innerHTML = '';
+  const wrap   = document.getElementById('barcode-wrap');
   const status = document.getElementById('scan-status');
-  const btn = document.getElementById('barcode-scan-btn');
-  if(wrap) wrap.style.display = 'none';
+  const btn    = document.getElementById('barcode-scan-btn');
+  if(wrap)   wrap.style.display   = 'none';
   if(status) status.style.display = 'none';
   if(btn) {
     btn.innerHTML = '📷 바코드 스캔 <span style="font-size:10px;opacity:0.8;">(무료)</span>';
@@ -859,23 +908,7 @@ async function stopBarcodeScanner() {
 async function ocrScanImage(b64, mime) {
   showLoading('Tesseract OCR로 텍스트 인식 중...');
   try {
-    // html5-qrcode로 먼저 DataMatrix 시도
-    if(typeof Html5Qrcode !== 'undefined') {
-      try {
-        const scanner = new Html5Qrcode('__ocr_tmp__', { verbose: false });
-        const imgSrc = 'data:' + mime + ';base64,' + b64;
-        const result = await scanner.scanFileV2(
-          dataURLtoFile(imgSrc, 'scan.jpg'), true
-        );
-        if(result && result.decodedText) {
-          hideLoading();
-          parseGS1(result.decodedText);
-          return;
-        }
-      } catch(e) { /* OCR로 fallback */ }
-    }
-
-    // Tesseract OCR fallback
+    // Tesseract OCR
     if(typeof Tesseract === 'undefined') {
       hideLoading();
       toast('OCR 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warn');
@@ -1139,10 +1172,8 @@ function submitEntry() {
         const cur = getSubQty(id);
         return `${mat?.name||id}: ${cur}개 → ${Math.max(0,cur-deduct)}개 (−${deduct})`;
       }).join('\n');
-      if(confirm(`✅ 입고 저장 후 부자재 자동 차감\n\n${preview}\n\n차감하시겠습니까?`)) {
         const summary = applySubDeduction(currentScan.model, qty);
-        subMsg = '\n부자재 차감: ' + summary.join(', ');
-      }
+      if(summary.length) subMsg = ' | 부자재 차감: ' + summary.join(', ');
     }
   }
 
