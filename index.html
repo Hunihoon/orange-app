@@ -9,7 +9,8 @@
 <meta name="theme-color" content="#FF5A1F">
 <title>오렌지메딕스 재고관리</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 :root{
@@ -308,16 +309,10 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
     <div class="card-t">UDI 바코드 스캔</div>
 
     <!-- 바코드 실시간 스캔 뷰어 -->
-    <div id="barcode-wrap" style="display:none;position:relative;border-radius:var(--r);overflow:hidden;background:#000;margin-bottom:10px;">
-      <video id="barcode-video" style="width:100%;max-height:260px;object-fit:cover;display:block;" playsinline muted></video>
-      <!-- 조준선 -->
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-        <div style="width:88%;max-width:380px;height:140px;border:3px solid #22C55E;border-radius:10px;box-shadow:0 0 0 2000px rgba(0,0,0,0.45);"></div>
-      </div>
-      <div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:11px;color:rgba(255,255,255,0.8);">
-        네모난 코드(DataMatrix) 또는 긴 바코드를 사각형 안에 맞추세요
-      </div>
-      <button onclick="stopBarcodeScanner()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    <div id="barcode-wrap" style="display:none;border-radius:var(--r);overflow:hidden;margin-bottom:10px;position:relative;">
+      <!-- html5-qrcode가 여기에 카메라를 렌더링 -->
+      <div id="barcode-video-container" style="width:100%;"></div>
+      <button onclick="stopBarcodeScanner()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:15px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;">✕</button>
     </div>
 
     <!-- 스캔 버튼들 -->
@@ -327,7 +322,7 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
         📷 바코드 스캔 <span style="font-size:10px;opacity:0.8;">(무료)</span>
       </button>
       <button class="btn btn-ghost" onclick="document.getElementById('file-in').click()">
-        🖼 사진으로 스캔 <span style="font-size:10px;opacity:0.8;">(AI)</span>
+        🖼 사진으로 스캔 <span style="font-size:10px;opacity:0.8;">(OCR/AI)</span>
       </button>
     </div>
     <input type="file" id="cam-in" accept="image/*" capture="environment" style="display:none" onchange="handleImage(this)">
@@ -741,7 +736,13 @@ function handleImage(input) {
     document.getElementById('preview-wrap').style.display = 'block';
     selectedQuick = null;
     document.querySelectorAll('.qp').forEach(el => el.classList.remove('selected'));
-    analyzeUDI(src.split(',')[1], mime);
+    const b64 = src.split(',')[1];
+    // API 키 있으면 Claude AI, 없으면 OCR
+    if(loadApiKey()) {
+      analyzeUDI(b64, mime);
+    } else {
+      ocrScanImage(b64, mime);
+    }
   };
   reader.readAsDataURL(file);
 }
@@ -759,142 +760,194 @@ function clearPreview() {
 }
 
 // ─── CLAUDE API ───────────────────────────────────────────
-// ─── BARCODE SCANNER (무료, ZXing) ───────────────────────
-let barcodeReader = null;
-let barcodeStream = null;
+// ─── BARCODE SCANNER (html5-qrcode) ────────────────────────
+let html5QrScanner = null;
 
 async function startBarcodeScanner() {
   const wrap = document.getElementById('barcode-wrap');
-  const video = document.getElementById('barcode-video');
-  const btn = document.getElementById('barcode-scan-btn');
+  const btn  = document.getElementById('barcode-scan-btn');
   const status = document.getElementById('scan-status');
 
-  // ZXing 로드 확인
-  if(typeof ZXing === 'undefined') {
-    toast('바코드 스캔 라이브러리 로딩 중... 잠시 후 다시 시도해주세요', 'warn');
+  if(typeof Html5Qrcode === 'undefined') {
+    toast('스캔 라이브러리 로딩 중... 잠시 후 다시 시도해주세요', 'warn');
     return;
   }
 
+  // 이미 실행 중이면 중지
+  if(html5QrScanner) { stopBarcodeScanner(); return; }
+
+  wrap.style.display = 'block';
+  status.style.display = 'block';
+  status.textContent = '🔍 스캔 중...';
+  btn.innerHTML = '⏹ 스캔 중지';
+  btn.onclick = stopBarcodeScanner;
+
   try {
-    // 카메라 스트림 시작
-    barcodeStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    video.srcObject = barcodeStream;
-    await video.play();
-    wrap.style.display = 'block';
-    status.style.display = 'block';
-    status.textContent = '🔍 스캔 중...';
-    btn.textContent = '⏹ 스캔 중지';
-    btn.onclick = stopBarcodeScanner;
+    html5QrScanner = new Html5Qrcode('barcode-video-container');
+    const config = {
+      fps: 15,
+      qrbox: { width: 300, height: 160 },
+      aspectRatio: 1.5,
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.DATA_MATRIX,
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13,
+      ],
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    };
 
-    // ZXing MultiFormat reader (DataMatrix + QR + Code128 등 모두 지원)
-    const hints = new Map();
-    const formats = [
-      ZXing.BarcodeFormat.DATA_MATRIX,
-      ZXing.BarcodeFormat.QR_CODE,
-      ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.ITF,
-      ZXing.BarcodeFormat.EAN_13,
-    ];
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-    barcodeReader = new ZXing.MultiFormatReader();
-    barcodeReader.setHints(hints);
-
-    scanFrame(video);
+    await html5QrScanner.start(
+      { facingMode: 'environment' },
+      config,
+      (decodedText) => {
+        stopBarcodeScanner();
+        parseGS1(decodedText);
+      },
+      () => {} // 인식 실패 시 무시 (계속 시도)
+    );
   } catch(e) {
-    toast('카메라 권한이 필요합니다. 설정에서 허용해주세요.', 'err');
     stopBarcodeScanner();
+    if(e.toString().includes('permission')) {
+      toast('카메라 권한이 필요합니다. 브라우저 설정에서 허용해주세요.', 'err');
+    } else {
+      toast('카메라 시작 오류: ' + e, 'err');
+    }
   }
 }
 
-function scanFrame(video) {
-  if(!barcodeStream) return;
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+async function stopBarcodeScanner() {
+  if(html5QrScanner) {
+    try {
+      await html5QrScanner.stop();
+      html5QrScanner.clear();
+    } catch(e) {}
+    html5QrScanner = null;
+  }
+  const wrap = document.getElementById('barcode-wrap');
+  const status = document.getElementById('scan-status');
+  const btn = document.getElementById('barcode-scan-btn');
+  if(wrap) wrap.style.display = 'none';
+  if(status) status.style.display = 'none';
+  if(btn) {
+    btn.innerHTML = '📷 바코드 스캔 <span style="font-size:10px;opacity:0.8;">(무료)</span>';
+    btn.onclick = startBarcodeScanner;
+  }
+}
 
+// ─── 사진 업로드: Tesseract OCR ──────────────────────────
+async function ocrScanImage(b64, mime) {
+  showLoading('Tesseract OCR로 텍스트 인식 중...');
   try {
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const luminance = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
-    const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
-    const result = barcodeReader.decode(binaryBitmap);
-    if(result) {
-      // 스캔 성공
-      stopBarcodeScanner();
-      const raw = result.getText();
-      parseGS1(raw);
+    // html5-qrcode로 먼저 DataMatrix 시도
+    if(typeof Html5Qrcode !== 'undefined') {
+      try {
+        const scanner = new Html5Qrcode('__ocr_tmp__', { verbose: false });
+        const imgSrc = 'data:' + mime + ';base64,' + b64;
+        const result = await scanner.scanFileV2(
+          dataURLtoFile(imgSrc, 'scan.jpg'), true
+        );
+        if(result && result.decodedText) {
+          hideLoading();
+          parseGS1(result.decodedText);
+          return;
+        }
+      } catch(e) { /* OCR로 fallback */ }
+    }
+
+    // Tesseract OCR fallback
+    if(typeof Tesseract === 'undefined') {
+      hideLoading();
+      toast('OCR 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warn');
       return;
     }
+    const imgSrc = 'data:' + mime + ';base64,' + b64;
+    const result = await Tesseract.recognize(imgSrc, 'eng', {
+      logger: () => {}
+    });
+    const text = result.data.text;
+    hideLoading();
+
+    // (01) (10) (17) 패턴 파싱
+    const parsed = parseTextUDI(text);
+    if(parsed.di || parsed.lot || parsed.exp) {
+      const prod = matchProduct(parsed.di);
+      showResultBox({ di:parsed.di, lot:parsed.lot, exp:fmtExp(parsed.exp), ...prod });
+      toast('✅ 텍스트 인식 성공!', 'ok');
+    } else {
+      toast('UDI 코드를 찾지 못했습니다. 스티커 숫자 부분이 잘 보이도록 찍어주세요.', 'err');
+      showResultBox({di:'',lot:'',exp:'',name:'인식 실패',model:''});
+    }
   } catch(e) {
-    // 아직 못 읽음 — 계속 시도
+    hideLoading();
+    toast('인식 오류: ' + e.message, 'err');
   }
-  requestAnimationFrame(() => scanFrame(video));
 }
 
-function stopBarcodeScanner() {
-  if(barcodeStream) {
-    barcodeStream.getTracks().forEach(t => t.stop());
-    barcodeStream = null;
-  }
-  barcodeReader = null;
-  document.getElementById('barcode-wrap').style.display = 'none';
-  document.getElementById('scan-status').style.display = 'none';
-  const btn = document.getElementById('barcode-scan-btn');
-  btn.textContent = '📷 바코드 스캔 (무료)';
-  btn.onclick = startBarcodeScanner;
+function dataURLtoFile(dataurl, filename) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--) u8arr[n] = bstr.charCodeAt(n);
+  return new File([u8arr], filename, { type: mime });
 }
 
-// GS1 UDI 파싱 — (01)(10)(17) 추출
+// 텍스트에서 UDI 파싱 (OCR 결과용 — 공백/줄바꿈 포함)
+function parseTextUDI(text) {
+  if(!text) return {};
+  // 공백 정규화
+  const normalized = text.replace(/\r/g,'').replace(/\n/g,' ');
+
+  // (01) 패턴 — 공백 포함 14자리
+  const m01 = normalized.match(/\(01\)\s*([\d\s]{10,20})/);
+  const m10 = normalized.match(/\(10\)\s*([\w\d]+)/);
+  const m17 = normalized.match(/\(17\)\s*([\d\s]{6,8})/);
+
+  const di  = m01 ? m01[1].replace(/\s/g,'').substring(0,14) : '';
+  const lot = m10 ? m10[1].trim() : '';
+  const exp = m17 ? m17[1].replace(/\s/g,'').substring(0,6) : '';
+
+  return { di: di.padStart(di.length>=13?14:di.length,'0'), lot, exp };
+}
+
+// GS1 바코드 원시값 파싱 (DataMatrix/QR 스캔 결과용)
 function parseGS1(raw) {
   if(!raw) { toast('코드를 읽지 못했습니다', 'err'); return; }
 
   let di = '', lot = '', exp = '';
 
-  // GS1-128 / DataMatrix: AI 괄호 방식  예) (01)08800211800022(10)250609(17)280610
-  const bracketDI  = raw.match(/\(01\)\s*([\d\s]{10,18})/);
-  const bracketLOT = raw.match(/\(10\)\s*([^\(]{1,20})/);
-  const bracketEXP = raw.match(/\(17\)\s*([\d\s]{6,8})/);
+  // 괄호 방식: (01)08800211800022(10)250609(17)280610
+  const m01 = raw.match(/\(01\)\s*([\d\s]{10,18})/);
+  const m10 = raw.match(/\(10\)\s*([^\(\)\s]{1,20})/);
+  const m17 = raw.match(/\(17\)\s*([\d\s]{6,8})/);
 
-  if(bracketDI) {
-    di  = (bracketDI[1]  || '').replace(/\s/g,'');
-    lot = (bracketLOT ? bracketLOT[1] : '').trim();
-    exp = (bracketEXP ? bracketEXP[1] : '').replace(/\s/g,'');
+  if(m01) {
+    di  = m01[1].replace(/\s/g,'');
+    lot = m10 ? m10[1].trim() : '';
+    exp = m17 ? m17[1].replace(/\s/g,'') : '';
   } else {
-    // 괄호 없는 GS1 연속 포맷: AI가 고정길이로 연속됨
-    // AI 01 = 14자리 → AI 17 = 6자리 → AI 10 = 가변(FNC1로 끝)
+    // 괄호 없는 연속 GS1: 01{14}17{6}10{var}
     const plain = raw.replace(/\s/g,'');
     if(plain.startsWith('01') && plain.length >= 16) {
       di = plain.substring(2, 16);
       let rest = plain.substring(16);
-      // 17 (유효기간 6자리)
-      const expMatch = rest.match(/17(\d{6})/);
-      if(expMatch) { exp = expMatch[1]; rest = rest.replace('17'+expMatch[1],''); }
-      // 10 (로트번호)
-      const lotMatch = rest.match(/10([A-Za-z0-9]{1,20})/);
-      if(lotMatch) lot = lotMatch[1];
+      const em = rest.match(/17(\d{6})/);
+      if(em) { exp = em[1]; rest = rest.replace('17'+em[1],''); }
+      const lm = rest.match(/10([A-Za-z0-9]{1,20})/);
+      if(lm) lot = lm[1];
     } else {
-      // 인식은 됐지만 UDI 형식이 아닌 경우
-      toast('UDI 코드가 아닙니다: ' + raw.substring(0,30), 'warn');
+      toast('UDI 형식이 아닙니다: ' + raw.substring(0,40), 'warn');
       return;
     }
   }
 
-  // DI 앞 0 보정 (14자리 확보)
   if(di && di.length < 14) di = di.padStart(14,'0');
 
   const prod = matchProduct(di);
-  showResultBox({
-    di,
-    lot,
-    exp: fmtExp(exp),
-    ...prod
-  });
+  showResultBox({ di, lot, exp: fmtExp(exp), ...prod });
   toast('✅ 바코드 인식 성공!', 'ok');
 }
 
