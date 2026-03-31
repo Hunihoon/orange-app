@@ -219,6 +219,15 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
 /* INLINE ROW EDIT */
 .edit-row{background:rgba(255,90,31,.05);border-left:2px solid var(--or);}
 
+/* html5-qrcode 스캐너 커스텀 스타일 */
+#barcode-video-container { border-radius: var(--r); overflow: hidden; background: #000; }
+#barcode-video-container video { width: 100% !important; max-height: 300px !important; object-fit: cover !important; }
+#qr-shaded-region { border-width: 0 !important; }
+#barcode-video-container > div > div { border: 3px solid #22C55E !important; border-radius: 10px !important; box-shadow: 0 0 0 2000px rgba(0,0,0,0.5) !important; }
+#barcode-video-container span { display: none !important; }
+#barcode-video-container select { display: none !important; }
+#barcode-video-container img { display: none !important; }
+
 /* 부자재 */
 .sub-group{margin-bottom:10px;}
 .sub-gtitle{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;padding:8px 14px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs) var(--rs) 0 0;display:flex;align-items:center;gap:6px;}
@@ -312,6 +321,11 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
     <div id="barcode-wrap" style="display:none;border-radius:var(--r);overflow:hidden;margin-bottom:10px;position:relative;">
       <!-- html5-qrcode가 여기에 카메라를 렌더링 -->
       <div id="barcode-video-container" style="width:100%;"></div>
+      <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;pointer-events:none;z-index:5;">
+        <span style="background:rgba(0,0,0,0.65);color:rgba(255,255,255,0.9);font-size:11px;padding:4px 12px;border-radius:20px;">
+          DataMatrix 코드를 초록 박스 안에 맞추세요
+        </span>
+      </div>
       <button onclick="stopBarcodeScanner()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:15px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;">✕</button>
     </div>
 
@@ -783,11 +797,16 @@ async function startBarcodeScanner() {
   btn.onclick = stopBarcodeScanner;
 
   try {
-    html5QrScanner = new Html5Qrcode('barcode-video-container');
+    html5QrScanner = new Html5Qrcode('barcode-video-container', { verbose: false });
     const config = {
       fps: 15,
-      qrbox: { width: 300, height: 160 },
-      aspectRatio: 1.5,
+      qrbox: (viewfinderWidth, viewfinderHeight) => {
+        // 뷰파인더의 85% 너비, 높이는 너비의 55%
+        const w = Math.floor(viewfinderWidth * 0.85);
+        const h = Math.floor(w * 0.55);
+        return { width: w, height: h };
+      },
+      aspectRatio: 1.6,
       formatsToSupport: [
         Html5QrcodeSupportedFormats.DATA_MATRIX,
         Html5QrcodeSupportedFormats.QR_CODE,
@@ -895,56 +914,92 @@ function dataURLtoFile(dataurl, filename) {
   return new File([u8arr], filename, { type: mime });
 }
 
-// 텍스트에서 UDI 파싱 (OCR 결과용 — 공백/줄바꿈 포함)
+// 텍스트에서 UDI 파싱 (OCR 결과용)
 function parseTextUDI(text) {
   if(!text) return {};
-  // 공백 정규화
-  const normalized = text.replace(/\r/g,'').replace(/\n/g,' ');
-
-  // (01) 패턴 — 공백 포함 14자리
-  const m01 = normalized.match(/\(01\)\s*([\d\s]{10,20})/);
-  const m10 = normalized.match(/\(10\)\s*([\w\d]+)/);
-  const m17 = normalized.match(/\(17\)\s*([\d\s]{6,8})/);
-
-  const di  = m01 ? m01[1].replace(/\s/g,'').substring(0,14) : '';
-  const lot = m10 ? m10[1].trim() : '';
-  const exp = m17 ? m17[1].replace(/\s/g,'').substring(0,6) : '';
-
-  return { di: di.padStart(di.length>=13?14:di.length,'0'), lot, exp };
+  const norm = text.replace(/\r?\n/g,' ').replace(/[Oo]/g,'0').replace(/[Il|]/g,'1');
+  const m01 = norm.match(/\(01\)\s*([\d\s]{10,20})/);
+  const m10 = norm.match(/\(10\)\s*([\d\w]+)/);
+  const m17 = norm.match(/\(17\)\s*([\d\s]{6,8})/);
+  if(m01) {
+    return {
+      di:  m01[1].replace(/\s/g,'').substring(0,14).padStart(14,'0'),
+      lot: m10 ? m10[1].trim() : '',
+      exp: m17 ? m17[1].replace(/\s/g,'').substring(0,6) : ''
+    };
+  }
+  const clean = norm.replace(/\s/g,'');
+  const i = clean.indexOf('01');
+  if(i>=0 && clean.length-i>=16) {
+    const sub = clean.substring(i);
+    const di = sub.substring(2,16);
+    let rest=sub.substring(16), lot='', exp='';
+    if(rest.startsWith('10')){const i17=rest.indexOf('17',2);if(i17>2){lot=rest.substring(2,i17);exp=rest.substring(i17+2,i17+8);}else lot=rest.substring(2);}
+    else if(rest.startsWith('17')){exp=rest.substring(2,8);const r2=rest.substring(8);if(r2.startsWith('10'))lot=r2.substring(2);}
+    return {di:di.padStart(14,'0'),lot,exp};
+  }
+  return {};
 }
 
 // GS1 바코드 원시값 파싱 (DataMatrix/QR 스캔 결과용)
+// 지원 포맷:
+//   괄호형: (01)08800211800022(10)250609(17)280610
+//   연속형: 01088002118000221025060917280610
+//   공백형: (01) 0 8800 2118 00022 (10) 250609 (17) 280610
 function parseGS1(raw) {
   if(!raw) { toast('코드를 읽지 못했습니다', 'err'); return; }
 
   let di = '', lot = '', exp = '';
 
-  // 괄호 방식: (01)08800211800022(10)250609(17)280610
-  const m01 = raw.match(/\(01\)\s*([\d\s]{10,18})/);
-  const m10 = raw.match(/\(10\)\s*([^\(\)\s]{1,20})/);
-  const m17 = raw.match(/\(17\)\s*([\d\s]{6,8})/);
+  // ── 1. 공백 제거 후 처리 ──────────────────────────────
+  const clean = raw.replace(/\s/g, '');
 
-  if(m01) {
-    di  = m01[1].replace(/\s/g,'');
-    lot = m10 ? m10[1].trim() : '';
-    exp = m17 ? m17[1].replace(/\s/g,'') : '';
-  } else {
-    // 괄호 없는 연속 GS1: 01{14}17{6}10{var}
-    const plain = raw.replace(/\s/g,'');
-    if(plain.startsWith('01') && plain.length >= 16) {
-      di = plain.substring(2, 16);
-      let rest = plain.substring(16);
-      const em = rest.match(/17(\d{6})/);
-      if(em) { exp = em[1]; rest = rest.replace('17'+em[1],''); }
-      const lm = rest.match(/10([A-Za-z0-9]{1,20})/);
-      if(lm) lot = lm[1];
-    } else {
-      toast('UDI 형식이 아닙니다: ' + raw.substring(0,40), 'warn');
-      return;
+  // ── 2. 괄호형 파싱 (01)...(10)...(17)... ──────────────
+  const hasBracket = clean.includes('(01)') || clean.includes('(10)') || clean.includes('(17)');
+  if(hasBracket) {
+    const m01 = clean.match(/\(01\)([\d]{10,14})/);
+    const m10 = clean.match(/\(10\)([^\(]{1,20})/);
+    const m17 = clean.match(/\(17\)([\d]{6})/);
+    if(m01) di  = m01[1].padStart(14,'0');
+    if(m10) lot = m10[1];
+    if(m17) exp = m17[1];
+
+  // ── 3. 연속형 파싱 01{14자리}...  ─────────────────────
+  } else if(clean.startsWith('01') && clean.length >= 16) {
+    di = clean.substring(2, 16);
+    let rest = clean.substring(16);
+
+    // 순서 A: 10(로트)...17(날짜)
+    if(rest.startsWith('10')) {
+      const idx17 = rest.indexOf('17', 2);
+      if(idx17 > 2) {
+        lot = rest.substring(2, idx17);
+        exp = rest.substring(idx17 + 2, idx17 + 8);
+      } else {
+        lot = rest.substring(2);
+      }
     }
+    // 순서 B: 17(날짜)10(로트)
+    else if(rest.startsWith('17') && rest.length >= 8) {
+      exp = rest.substring(2, 8);
+      const rest2 = rest.substring(8);
+      if(rest2.startsWith('10')) lot = rest2.substring(2);
+    }
+    // 순서 C: 중간에 17 있는 경우
+    else {
+      const i17 = rest.indexOf('17');
+      const i10 = rest.indexOf('10');
+      if(i17 >= 0 && rest.length >= i17 + 8) exp = rest.substring(i17+2, i17+8);
+      if(i10 >= 0) lot = rest.substring(i10+2, i17 > i10 ? i17 : rest.length);
+    }
+  } else {
+    // 인식됐지만 UDI 형식 아닌 경우
+    toast('UDI 코드가 아닙니다. 제품 스티커의 네모난 DataMatrix 코드를 찾아주세요.', 'warn');
+    return;
   }
 
-  if(di && di.length < 14) di = di.padStart(14,'0');
+  // DI 14자리 보정
+  if(di && di.length < 14) di = di.padStart(14, '0');
 
   const prod = matchProduct(di);
   showResultBox({ di, lot, exp: fmtExp(exp), ...prod });
