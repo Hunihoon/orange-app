@@ -217,6 +217,21 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
 
 /* INLINE ROW EDIT */
 .edit-row{background:rgba(255,90,31,.05);border-left:2px solid var(--or);}
+
+/* 부자재 */
+.sub-group{margin-bottom:10px;}
+.sub-gtitle{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;padding:8px 14px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs) var(--rs) 0 0;display:flex;align-items:center;gap:6px;}
+.sub-gtitle::before{content:'';width:3px;height:11px;background:var(--or);border-radius:2px;flex-shrink:0;}
+.sub-item{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--bd);border-top:none;background:var(--s1);}
+.sub-item:last-child{border-radius:0 0 var(--rs) var(--rs);}
+.sub-name{flex:1;font-size:13px;color:var(--t1);}
+.sub-qty-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono';min-width:36px;text-align:center;}
+.sub-btn{width:32px;height:32px;border:1px solid var(--bd);border-radius:var(--rs);background:var(--s2);color:var(--t1);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;font-weight:300;line-height:1;}
+.sub-btn.p:active{background:rgba(34,197,94,.2);border-color:var(--gr);}
+.sub-btn.m:active{background:rgba(239,68,68,.2);border-color:var(--rd);}
+.sub-num{width:44px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:4px 6px;color:var(--t1);font-size:12px;font-family:'JetBrains Mono';text-align:center;outline:none;}
+.sub-num:focus{border-color:var(--or);}
+.sub-log-btn{font-size:11px;color:var(--t3);background:transparent;border:none;cursor:pointer;padding:2px 6px;}
 </style>
 </head>
 <body>
@@ -297,7 +312,7 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
       <video id="barcode-video" style="width:100%;max-height:260px;object-fit:cover;display:block;" playsinline muted></video>
       <!-- 조준선 -->
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-        <div style="width:72%;max-width:280px;height:80px;border:2px solid var(--or);border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,0.35);"></div>
+        <div style="width:88%;max-width:380px;height:140px;border:3px solid #22C55E;border-radius:10px;box-shadow:0 0 0 2000px rgba(0,0,0,0.45);"></div>
       </div>
       <div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:11px;color:rgba(255,255,255,0.8);">
         네모난 코드(DataMatrix) 또는 긴 바코드를 사각형 안에 맞추세요
@@ -343,6 +358,10 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
       <div class="fg"><label>날짜</label><input type="date" id="f-date"></div>
       <div class="fg"><label>수량</label><input type="number" id="f-qty" value="1" min="1" inputmode="numeric"></div>
     </div>
+    <div class="form-row">
+      <div class="fg"><label>로트번호 (10)</label><input type="text" id="f-lot" placeholder="예: 250609"></div>
+      <div class="fg"><label>유효기간 (17)</label><input type="date" id="f-exp"></div>
+    </div>
     <div class="fg" id="dest-group" style="display:none"><label>납품처</label><select id="f-dest"></select></div>
     <div class="fg"><label>메모</label><textarea id="f-memo" placeholder="비고..."></textarea></div>
     <button class="btn btn-or btn-full" onclick="submitEntry()"><span id="submit-label">입고 저장</span></button>
@@ -379,9 +398,26 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
 <!-- ═══════════════════ STOCK ═══════════════════ -->
 <div id="panel-stock" class="panel">
   <div class="sh"><h2>재고 현황</h2></div>
-  <!-- Safety stock warning -->
+  <!-- 안전재고 경고 -->
   <div id="safety-warnings"></div>
-  <div class="sg" id="stock-grid"></div>
+
+  <!-- 서브탭 -->
+  <div style="display:flex;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:3px;gap:3px;margin-bottom:12px;">
+    <button class="mode-btn in active" id="stab-product" onclick="switchStockTab('product')" style="font-size:12px;">📦 제품 재고</button>
+    <button class="mode-btn in" id="stab-sub" onclick="switchStockTab('sub')" style="font-size:12px;">🗂 부자재 재고</button>
+  </div>
+
+  <!-- 제품 재고 -->
+  <div id="stock-product-panel">
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="stock-grid"></div>
+    </div>
+  </div>
+
+  <!-- 부자재 재고 -->
+  <div id="stock-sub-panel" style="display:none">
+    <div id="sub-grid"></div>
+  </div>
 </div>
 
 <!-- ═══════════════════ SETTINGS ═══════════════════ -->
@@ -456,7 +492,7 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
       <div class="sz-i">📊</div>
       <h3>엑셀 파일 선택</h3><p>.xlsx</p>
     </div>
-    <input type="file" id="xl-in" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)">
+    <input type="file" id="xl-in" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none" onchange="importExcel(this)">
     <div class="modal-ft"><button class="btn btn-ghost" onclick="closeModal('upload-modal')">취소</button></div>
   </div>
 </div>
@@ -485,7 +521,104 @@ tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;ove
 <div id="toast"></div>
 
 <script>
-// ─── PRODUCT DB ───────────────────────────────────────────
+// ─── 부자재 데이터 ─────────────────────────────────────────
+const SUBMATERIALS = [
+  // 돌핀1
+  {id:'d1-carton',  group:'돌핀1',    name:'카톤박스',   products:['DP-SIS','DP-SISL']},
+  {id:'d1-sbox',    group:'돌핀1',    name:'소박스',     products:['DP-SIS','DP-SISL']},
+  {id:'d1-b38',     group:'돌핀1',    name:'38블리스터', products:['DP-SIS']},
+  {id:'d1-b45',     group:'돌핀1',    name:'45블리스터', products:['DP-SISL']},
+  {id:'d1-tyvek',   group:'돌핀1',    name:'타이벡',     products:['DP-SIS','DP-SISL']},
+  // 돌핀2
+  {id:'d2-carton',  group:'돌핀2',    name:'카톤박스',   products:['DP-SIS2','DP-SIS2L']},
+  {id:'d2-sbox',    group:'돌핀2',    name:'소박스',     products:['DP-SIS2','DP-SIS2L']},
+  {id:'d2-b38',     group:'돌핀2',    name:'38블리스터', products:['DP-SIS2']},
+  {id:'d2-b45',     group:'돌핀2',    name:'45블리스터', products:['DP-SIS2L']},
+  {id:'d2-tyvek',   group:'돌핀2',    name:'타이벡',     products:['DP-SIS2','DP-SIS2L']},
+  // 스파이더포트
+  {id:'sp-carton',  group:'스파이더포트', name:'카톤박스', products:['SP-12']},
+  {id:'sp-sbox',    group:'스파이더포트', name:'소박스',   products:['SP-12']},
+  // 듀마컵
+  {id:'dc-carton',  group:'듀마컵',   name:'카톤박스',   products:['CLB28','CLB32','CLB36','CLB40']},
+  {id:'dc-sbox',    group:'듀마컵',   name:'소박스',     products:['CLB28','CLB32','CLB36','CLB40']},
+  {id:'dc-air',     group:'듀마컵',   name:'공기주머니', products:['CLB28','CLB32','CLB36','CLB40']},
+];
+
+// ─── BOM (Bill of Materials) ──────────────────────────────
+// 제품 모델 → 입고 qty개당 소모되는 부자재 규칙
+// perUnit: 제품 1개당 소모, perCarton: 카톤 1박스당 수량(나눗셈용), perSbox: 소박스 1박스당 수량
+const BOM = {
+  // 돌핀1 계열
+  'DP-SIS':   { cartonQty:20, sboxQty:5, mats:[ {id:'d1-carton', perCarton:true}, {id:'d1-sbox', perSbox:true}, {id:'d1-b38', perUnit:1}, {id:'d1-tyvek', perUnit:1} ] },
+  'DP-SISL':  { cartonQty:20, sboxQty:5, mats:[ {id:'d1-carton', perCarton:true}, {id:'d1-sbox', perSbox:true}, {id:'d1-b45', perUnit:1}, {id:'d1-tyvek', perUnit:1} ] },
+  // 돌핀2 계열
+  'DP-SIS2':  { cartonQty:20, sboxQty:5, mats:[ {id:'d2-carton', perCarton:true}, {id:'d2-sbox', perSbox:true}, {id:'d2-b38', perUnit:1}, {id:'d2-tyvek', perUnit:1} ] },
+  'DP-SIS2L': { cartonQty:20, sboxQty:5, mats:[ {id:'d2-carton', perCarton:true}, {id:'d2-sbox', perSbox:true}, {id:'d2-b45', perUnit:1}, {id:'d2-tyvek', perUnit:1} ] },
+  // 스파이더포트
+  'SP-12':    { cartonQty:16, sboxQty:4, mats:[ {id:'sp-carton', perCarton:true}, {id:'sp-sbox', perSbox:true} ] },
+  // 듀마컵 계열
+  'CLB28':    { cartonQty:20, sboxQty:5, mats:[ {id:'dc-carton', perCarton:true}, {id:'dc-sbox', perSbox:true}, {id:'dc-air', perUnit:1} ] },
+  'CLB32':    { cartonQty:20, sboxQty:5, mats:[ {id:'dc-carton', perCarton:true}, {id:'dc-sbox', perSbox:true}, {id:'dc-air', perUnit:1} ] },
+  'CLB36':    { cartonQty:20, sboxQty:5, mats:[ {id:'dc-carton', perCarton:true}, {id:'dc-sbox', perSbox:true}, {id:'dc-air', perUnit:1} ] },
+  'CLB40':    { cartonQty:20, sboxQty:5, mats:[ {id:'dc-carton', perCarton:true}, {id:'dc-sbox', perSbox:true}, {id:'dc-air', perUnit:1} ] },
+};
+
+// 입고 시 부자재 자동 차감 계산
+function calcSubDeduction(model, qty) {
+  const bom = BOM[model];
+  if(!bom) return [];
+  const result = [];
+  bom.mats.forEach(m => {
+    let deduct = 0;
+    if(m.perUnit)    deduct = qty * m.perUnit;
+    if(m.perCarton)  deduct = Math.floor(qty / bom.cartonQty);
+    if(m.perSbox)    deduct = Math.floor(qty / bom.sboxQty);
+    if(deduct > 0) result.push({id: m.id, deduct});
+  });
+  return result;
+}
+
+// 실제 차감 실행
+function applySubDeduction(model, qty) {
+  const deductions = calcSubDeduction(model, qty);
+  if(!deductions.length) return [];
+  const ss = loadSubStock();
+  const log = loadSubLog();
+  const summary = [];
+  deductions.forEach(({id, deduct}) => {
+    const mat = SUBMATERIALS.find(m=>m.id===id);
+    const before = ss[id]||0;
+    ss[id] = Math.max(0, before - deduct);
+    log.push({ id: Date.now()+Math.random(), date: today(), matId: id, name: mat?.name||id, group: mat?.group||'', delta: -deduct, qty: ss[id], auto: true });
+    summary.push(`${mat?.name||id} −${deduct}`);
+  });
+  saveSubStock(ss);
+  saveSubLog(log);
+  return summary;
+}
+
+const loadSubStock  = () => JSON.parse(localStorage.getItem('subStock')  || '{}');
+const loadSubLog    = () => JSON.parse(localStorage.getItem('subLog')    || '[]');
+const saveSubStock  = v  => localStorage.setItem('subStock',  JSON.stringify(v));
+const saveSubLog    = v  => localStorage.setItem('subLog',    JSON.stringify(v));
+
+function getSubQty(id) { return loadSubStock()[id] || 0; }
+
+function adjustSub(id, delta) {
+  const ss = loadSubStock();
+  ss[id] = Math.max(0, (ss[id]||0) + delta);
+  saveSubStock(ss);
+  const log = loadSubLog();
+  const mat = SUBMATERIALS.find(m=>m.id===id);
+  log.push({
+    id: Date.now(), date: today(),
+    matId: id, name: mat?.name||id, group: mat?.group||'',
+    delta, qty: ss[id]
+  });
+  saveSubLog(log);
+}
+
+// ─── PRODUCTS (기존)
 const PRODUCTS = [
   {name:'돌핀38 (Dolphin-SIS)',  model:'DP-SIS',   di:'08800211800060', kw:['돌핀38','돌핀','dolphin','sis','범용주입','배액']},
   {name:'돌핀45 (Dolphin-SIS)',  model:'DP-SISL',  di:'08800211800077', kw:['돌핀45','돌핀','dolphin','sisl','배액']},
@@ -541,7 +674,7 @@ function switchTab(id) {
   });
   document.getElementById('scroll-area').scrollTop = 0;
   if(id==='history') renderHistory();
-  if(id==='stock') { renderStock(); renderSafetyWarnings(); }
+  if(id==='stock') { renderStock(); renderSafetyWarnings(); if(activeStockTab==='sub') renderSubStock(); }
   if(id==='settings') { renderDestTags(); renderProductsTable(); renderSafetyStockList(); }
   if(id==='dash') { renderAlerts(); renderDashCharts(); renderMonthTabs(); }
 }
@@ -581,12 +714,14 @@ function selectQuick(idx) {
   document.getElementById('result-box').classList.remove('show');
   document.getElementById('entry-form').style.display = 'block';
   document.getElementById('r-exp-warn-row').style.display = 'none';
+  document.getElementById('f-lot').value = '';
+  document.getElementById('f-exp').value = '';
   renderDestSelect();
   setMode(mode);
-  toast(`${p.name.split(' ')[0]} 선택됨`, 'ok');
+  toast(`${p.name.split(' ')[0]} 선택됨 — 로트번호·유효기간을 입력해주세요`, 'ok');
   // show simplified result
   document.getElementById('r-di').textContent = p.di || '-';
-  document.getElementById('r-lot').textContent = '직접입력';
+  document.getElementById('r-lot').textContent = '아래에 직접 입력';
   document.getElementById('r-exp').textContent = '-';
   document.getElementById('r-name').textContent = p.name;
   document.getElementById('r-name').className = 'rvl match';
@@ -618,6 +753,8 @@ function clearPreview() {
   document.getElementById('entry-form').style.display = 'none';
   document.getElementById('cam-in').value = '';
   document.getElementById('file-in').value = '';
+  document.getElementById('f-lot').value = '';
+  document.getElementById('f-exp').value = '';
   currentScan = {};
 }
 
@@ -838,6 +975,9 @@ function showResultBox(d) {
 
   document.getElementById('result-box').classList.add('show');
   document.getElementById('entry-form').style.display = 'block';
+  document.getElementById('f-lot').value = d.lot || '';
+  if(d.exp && d.exp.length >= 7) document.getElementById('f-exp').value = d.exp;
+  else document.getElementById('f-exp').value = '';
   renderDestSelect();
   setMode(mode);
 }
@@ -850,6 +990,10 @@ function submitEntry() {
   const date = document.getElementById('f-date').value;
   const dest = mode!=='in' ? document.getElementById('f-dest').value : '';
   const memo = document.getElementById('f-memo').value;
+  const fLot = document.getElementById('f-lot').value.trim();
+  const fExp = document.getElementById('f-exp').value;
+  if(fLot) currentScan.lot = fLot;
+  if(fExp) currentScan.exp = fExp;
   const diClean = (currentScan.di||'').replace(/\s/g,'');
 
   // Check expiry before OUT
@@ -875,6 +1019,25 @@ function submitEntry() {
     di: diClean, memo
   });
   SS('records', records);
+
+  // 입고 시 부자재 자동 차감
+  let subMsg = '';
+  if(mode === 'in' && currentScan.model) {
+    const deductions = calcSubDeduction(currentScan.model, qty);
+    if(deductions.length > 0) {
+      // 차감 내역 미리 보여주고 확인
+      const preview = deductions.map(({id, deduct}) => {
+        const mat = SUBMATERIALS.find(m=>m.id===id);
+        const cur = getSubQty(id);
+        return `${mat?.name||id}: ${cur}개 → ${Math.max(0,cur-deduct)}개 (−${deduct})`;
+      }).join('\n');
+      if(confirm(`✅ 입고 저장 후 부자재 자동 차감\n\n${preview}\n\n차감하시겠습니까?`)) {
+        const summary = applySubDeduction(currentScan.model, qty);
+        subMsg = '\n부자재 차감: ' + summary.join(', ');
+      }
+    }
+  }
+
   renderAll();
   clearPreview();
   document.getElementById('entry-form').style.display = 'none';
@@ -883,7 +1046,7 @@ function submitEntry() {
   selectedQuick = null;
   document.querySelectorAll('.qp').forEach(el => el.classList.remove('selected'));
   const msgs = {in:'✅ 입고 저장됨', delivery:'✅ 납품 출고 저장됨', sample:'✅ 샘플 출고 저장됨'};
-  toast(msgs[mode]+' ('+qty+'개)', 'ok');
+  toast(msgs[mode]+' ('+qty+'개)'+subMsg, 'ok');
 }
 
 function calcStock(recs, di, model) {
@@ -1160,37 +1323,168 @@ function recalcStock() {
   SS('records', recs);
 }
 
-// ─── STOCK ────────────────────────────────────────────────
+// ─── STOCK SUB-TAB ────────────────────────────────────────
+let activeStockTab = 'product';
+function switchStockTab(tab) {
+  activeStockTab = tab;
+  document.getElementById('stab-product').classList.toggle('active', tab==='product');
+  document.getElementById('stab-sub').classList.toggle('active',     tab==='sub');
+  document.getElementById('stock-product-panel').style.display = tab==='product' ? 'block' : 'none';
+  document.getElementById('stock-sub-panel').style.display     = tab==='sub'     ? 'block' : 'none';
+  if(tab==='sub') renderSubStock();
+}
+
+// ─── 부자재 재고 렌더링 ───────────────────────────────────
+function renderSubStock() {
+  const panel = document.getElementById('sub-grid');
+  const groups = [...new Set(SUBMATERIALS.map(m=>m.group))];
+
+  panel.innerHTML = groups.map(grp => {
+    const items = SUBMATERIALS.filter(m=>m.group===grp);
+
+    // 이 그룹의 BOM 규칙 요약
+    const bomModels = Object.entries(BOM).filter(([model, bom]) =>
+      bom.mats.some(mat => items.find(i=>i.id===mat.id))
+    );
+    const bomSummary = bomModels.length ? bomModels.map(([model, bom]) => {
+      const p = PRODUCTS.find(x=>x.model===model);
+      const label = p ? p.name.split('(')[0].trim() : model;
+      return `${model}: 카톤${bom.cartonQty}개, 소박스${bom.sboxQty}개 단위`;
+    })[0] : '';
+
+    return `<div class="sub-group">
+      <div class="sub-gtitle">
+        ${grpIcon(grp)} ${grp}
+        ${bomSummary ? `<span style="margin-left:auto;font-size:10px;color:var(--t3);font-weight:400;">${bomSummary}</span>` : ''}
+      </div>
+      ${items.map(m => {
+        const qty = getSubQty(m.id);
+        const col = qty <= 0 ? 'var(--rd)' : qty <= 10 ? 'var(--yl)' : 'var(--gr)';
+        return `<div class="sub-item" id="subrow-${m.id}">
+          <div class="sub-name">${m.name}</div>
+          <button class="sub-btn m" onclick="subAdj('${m.id}',-1)">−</button>
+          <span class="sub-qty-val" id="subqty-${m.id}" style="color:${col}">${qty}</span>
+          <button class="sub-btn p" onclick="subAdj('${m.id}',+1)">+</button>
+          <input class="sub-num" id="subinput-${m.id}" type="number" min="0" placeholder="직접설정"
+            onkeydown="if(event.key==='Enter'){subSet('${m.id}')}"
+            inputmode="numeric">
+          <button class="sub-btn" style="font-size:12px;color:var(--or);border-color:var(--or);" onclick="subSet('${m.id}')">설정</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('') +
+  // BOM 규칙 안내 테이블
+  `<div class="card" style="margin-top:4px;">
+    <div class="card-t">📐 부자재 소모 규칙 (입고 시 자동 차감)</div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:var(--s2);">
+        <th style="padding:7px 10px;text-align:left;color:var(--t3);border-bottom:1px solid var(--bd);">제품</th>
+        <th style="padding:7px 8px;text-align:center;color:var(--t3);border-bottom:1px solid var(--bd);">카톤</th>
+        <th style="padding:7px 8px;text-align:center;color:var(--t3);border-bottom:1px solid var(--bd);">소박스</th>
+        <th style="padding:7px 8px;text-align:center;color:var(--t3);border-bottom:1px solid var(--bd);">블리스터</th>
+        <th style="padding:7px 8px;text-align:center;color:var(--t3);border-bottom:1px solid var(--bd);">타이벡</th>
+        <th style="padding:7px 8px;text-align:center;color:var(--t3);border-bottom:1px solid var(--bd);">공기주머니</th>
+      </tr></thead>
+      <tbody>
+        ${Object.entries(BOM).map(([model, bom]) => {
+          const hasBli = bom.mats.find(m=>m.id.includes('b38')||m.id.includes('b45'));
+          const bliName = hasBli ? (hasBli.id.includes('b38') ? '38블리' : '45블리') : '';
+          const hasTy  = bom.mats.find(m=>m.id.includes('tyvek'));
+          const hasAir = bom.mats.find(m=>m.id.includes('air'));
+          return `<tr style="border-bottom:1px solid var(--bd);">
+            <td style="padding:7px 10px;font-weight:500;color:var(--t1);">${model}</td>
+            <td style="padding:7px 8px;text-align:center;color:var(--t2);">÷${bom.cartonQty}</td>
+            <td style="padding:7px 8px;text-align:center;color:var(--t2);">÷${bom.sboxQty}</td>
+            <td style="padding:7px 8px;text-align:center;color:var(--t2);">${bliName ? '×1/개' : '-'}</td>
+            <td style="padding:7px 8px;text-align:center;color:var(--t2);">${hasTy ? '×1/개' : '-'}</td>
+            <td style="padding:7px 8px;text-align:center;color:var(--t2);">${hasAir ? '×1/개' : '-'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.6;">
+      ÷20 = 20개당 1개 소모 (카톤·소박스) &nbsp;·&nbsp; ×1/개 = 제품 1개당 1개 소모
+    </div>
+  </div>`;
+}
+
+function grpIcon(g) {
+  const map = {'돌핀1':'🐬','돌핀2':'🐬','스파이더포트':'🕷','듀마컵':'🏆'};
+  return map[g]||'📦';
+}
+
+function subAdj(id, delta) {
+  adjustSub(id, delta);
+  refreshSubQty(id);
+}
+
+function subSet(id) {
+  const inp = document.getElementById('subinput-'+id);
+  const val = parseInt(inp.value);
+  if(isNaN(val)||val<0) { toast('올바른 수량을 입력해주세요','err'); return; }
+  const ss = loadSubStock();
+  const old = ss[id]||0;
+  const diff = val - old;
+  adjustSub(id, diff);
+  inp.value = '';
+  refreshSubQty(id);
+  toast(`${SUBMATERIALS.find(m=>m.id===id)?.name} → ${val}개로 설정됨`,'ok');
+}
+
+function refreshSubQty(id) {
+  const qty = getSubQty(id);
+  const el = document.getElementById('subqty-'+id);
+  if(!el) return;
+  el.textContent = qty;
+  el.style.color = qty <= 0 ? 'var(--rd)' : qty <= 10 ? 'var(--yl)' : 'var(--t1)';
+}
+
+// ─── STOCK TAB 진입 시 sub도 재렌더 ──────────────────────
 function renderStock() {
   const sm = stockMap();
-  const safetyStk = loadSafetyStock();
+  const ss = loadSafetyStock();
   const grid = document.getElementById('stock-grid');
-  const maxV = Math.max(...Object.values(sm).filter(v=>v>0), 10);
 
-  // Group by product (combine models of same product name)
-  const grouped = {};
-  PRODUCTS.forEach(p => {
+  const rows = PRODUCTS.map(p => {
     const k = p.di||p.model;
-    const grpKey = p.name;
-    if(!grouped[grpKey]) grouped[grpKey] = {name:p.name, models:[], totalStock:0};
-    grouped[grpKey].models.push({model:p.model, di:p.di, stock:sm[k]||0});
-    grouped[grpKey].totalStock += sm[k]||0;
-  });
+    const v = sm[k]||0;
+    const safeMin = ss[k]||0;
+    const col = v <= 0 ? 'var(--rd)' : (safeMin > 0 && v <= safeMin) ? 'var(--yl)' : 'var(--gr)';
+    const statusTxt = v <= 0 ? '재고없음' : (safeMin > 0 && v <= safeMin) ? '부족' : '정상';
+    const statusBg  = v <= 0 ? 'rgba(239,68,68,.15)' : (safeMin > 0 && v <= safeMin) ? 'rgba(234,179,8,.15)' : 'rgba(34,197,94,.15)';
+    return {p, v, safeMin, col, statusTxt, statusBg};
+  }).sort((a,b) => b.v - a.v);
 
-  grid.innerHTML = Object.entries(grouped).map(([key, g]) => {
-    const v = g.totalStock;
-    const col = v <= 0 ? 'var(--rd)' : v <= 5 ? 'var(--yl)' : 'var(--gr)';
-    const pct = Math.min(Math.round(v/maxV*100), 100);
-    const safeK = g.models[0]?.di || g.models[0]?.model;
-    const safeMin = safetyStk[safeK] || 0;
-    return `<div class="sc">
-      <div class="sn">${g.name.split(' ')[0]}</div>
-      <div class="sm2">${g.models.map(m=>m.model).join(' / ')}</div>
-      <div class="sq" style="color:${col}">${v}</div>
-      <div class="sqs">개 재고${safeMin>0?` · 안전재고 ${safeMin}개`:''}</div>
-      <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${col}"></div></div>
-    </div>`;
-  }).join('');
+  grid.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead><tr style="background:var(--s2);">
+      <th style="padding:10px 12px;text-align:left;color:var(--t3);font-size:11px;font-weight:600;border-bottom:1px solid var(--bd);white-space:nowrap;">제품명</th>
+      <th style="padding:10px 12px;text-align:left;color:var(--t3);font-size:11px;font-weight:600;border-bottom:1px solid var(--bd);white-space:nowrap;">모델</th>
+      <th style="padding:10px 8px;text-align:center;color:var(--t3);font-size:11px;font-weight:600;border-bottom:1px solid var(--bd);white-space:nowrap;">현재고</th>
+      <th style="padding:10px 8px;text-align:center;color:var(--t3);font-size:11px;font-weight:600;border-bottom:1px solid var(--bd);white-space:nowrap;">안전재고</th>
+      <th style="padding:10px 8px;text-align:center;color:var(--t3);font-size:11px;font-weight:600;border-bottom:1px solid var(--bd);white-space:nowrap;">상태</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(({p,v,safeMin,col,statusTxt,statusBg}) => `
+      <tr style="border-bottom:1px solid var(--bd);">
+        <td style="padding:11px 12px;">
+          <div style="font-size:12px;font-weight:600;color:var(--t1);">${p.name.split('(')[0].trim()}</div>
+          <div style="font-size:10px;color:var(--t3);">${p.name.match(/\((.+?)\)/)?.[1]||''}</div>
+        </td>
+        <td style="padding:11px 12px;font-family:'JetBrains Mono';font-size:11px;color:var(--t2);white-space:nowrap;">${p.model}</td>
+        <td style="padding:11px 8px;text-align:center;">
+          <span style="font-size:24px;font-weight:700;font-family:'JetBrains Mono';color:${col};">${v}</span>
+          <div style="font-size:10px;color:var(--t3);">개</div>
+        </td>
+        <td style="padding:11px 8px;text-align:center;font-size:12px;color:var(--t3);font-family:'JetBrains Mono';">${safeMin||'-'}</td>
+        <td style="padding:11px 8px;text-align:center;">
+          <span style="display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;background:${statusBg};color:${col};">${statusTxt}</span>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
 }
 
 function renderSafetyWarnings() {
@@ -1282,7 +1576,17 @@ function updateApiDot() { const d=document.getElementById('api-dot'); if(d) d.cl
 // ─── EXCEL EXPORT ─────────────────────────────────────────
 function exportExcel() {
   const recs = loadRecords();
-  if(!recs.length){ toast('내보낼 데이터 없음','err'); return; }
+  if(!recs.length){
+    const wb = XLSX.utils.book_new();
+    const hdr = ['순번','날짜','유형','제품명','모델명','입고수량','출고수량','현재고','납품처','출고형태','로트번호','유효기간','UDI-DI','메모'];
+    const ex  = [['1','2025-01-01','입고','듀마컵32 (DUMA-CUP)','CLB32','10','0','10','','','250101','2028-01-01','08800211800022','예시 — 실제 사용 시 삭제']];
+    const ws  = XLSX.utils.aoa_to_sheet([hdr,...ex]);
+    ws['!cols']=[6,12,6,24,10,8,8,8,16,8,12,12,16,18].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb,ws,'재고이력');
+    XLSX.writeFile(wb,'오렌지메딕스_재고양식.xlsx');
+    toast('✅ 빈 양식 파일을 내려받았습니다','ok');
+    return;
+  }
   const wb = XLSX.utils.book_new();
   const hdr = ['순번','날짜','유형','제품명','모델명','입고수량','출고수량','현재고','납품처','출고형태','로트번호','유효기간','UDI-DI','메모'];
   const rows = recs.map(r=>[r.seq,r.date,r.mode==='in'?'입고':r.mode==='delivery'?'납품':'샘플',r.name,r.model,r.mode==='in'?r.qty:0,r.mode!=='in'?r.qty:0,r.stock,r.dest,r.mode==='delivery'?'납품':r.mode==='sample'?'샘플':'',r.lot,r.exp,r.di,r.memo]);
@@ -1292,6 +1596,14 @@ function exportExcel() {
   const sm=stockMap();
   const ws2=XLSX.utils.aoa_to_sheet([['제품명','모델명','현재고','UDI-DI'],...PRODUCTS.filter((p,i,a)=>a.findIndex(x=>x.model===p.model)===i).map(p=>[p.name,p.model,sm[p.di||p.model]||0,p.di])]);
   XLSX.utils.book_append_sheet(wb,ws2,'현재재고');
+  // 부자재 시트
+  const ss = loadSubStock();
+  const ws3 = XLSX.utils.aoa_to_sheet([
+    ['그룹','부자재명','현재수량','관련제품'],
+    ...SUBMATERIALS.map(m=>[m.group, m.name, ss[m.id]||0, m.products.join(', ')])
+  ]);
+  ws3['!cols']=[12,14,10,24].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws3,'부자재재고');
   XLSX.writeFile(wb,'오렌지메딕스_재고_'+today()+'.xlsx');
   toast('✅ 엑셀 내보내기 완료','ok');
 }
