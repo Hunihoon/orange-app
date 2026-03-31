@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#FF5A1F">
+<title>오렌지메딕스 재고관리</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{
+  --or:#FF5A1F;--or2:#FF7A45;--ord:#D94410;
+  --bg:#0A0A0B;--s1:#141416;--s2:#1C1C20;--s3:#252528;
+  --bd:#2A2A32;--t1:#F0F0F5;--t2:#8888A0;--t3:#505060;
+  --gr:#22C55E;--rd:#EF4444;--bl:#3B82F6;--yl:#EAB308;
+  --r:14px;--rs:9px;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Noto Sans KR',-apple-system,sans-serif;background:var(--bg);color:var(--t1);font-size:14px;line-height:1.5;display:flex;flex-direction:column;}
+
+/* HEADER */
+header{background:var(--s1);border-bottom:1px solid var(--bd);padding:0 16px;padding-top:var(--safe-t);height:calc(56px + var(--safe-t));display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:20;}
+.hdr-l{display:flex;align-items:center;gap:10px;}
+.logo{width:30px;height:30px;object-fit:contain;border-radius:6px;}
+.brand{font-size:15px;font-weight:700;letter-spacing:-.3px;}
+.brand span{color:var(--or);}
+.hdr-r{display:flex;gap:6px;}
+
+/* TAB BAR */
+.tabbar{display:flex;background:var(--s1);border-top:1px solid var(--bd);padding-bottom:var(--safe-b);flex-shrink:0;}
+.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;padding:9px 4px 7px;cursor:pointer;font-size:10px;color:var(--t3);gap:2px;transition:color .15s;border:none;background:transparent;font-family:'Noto Sans KR',sans-serif;}
+.tab-btn .ti{font-size:19px;line-height:1;}
+.tab-btn.active{color:var(--or);}
+
+/* SCROLL */
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;}
+.panel{display:none;padding:14px;padding-bottom:20px;}
+.panel.active{display:block;}
+
+/* CARDS */
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px;}
+.card-t{font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
+.card-t::before{content:'';width:3px;height:12px;background:var(--or);border-radius:2px;flex-shrink:0;}
+
+/* ALERT CARDS */
+.alert-card{border-radius:var(--r);padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;}
+.alert-card.danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);}
+.alert-card.warn{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);}
+.alert-card.info{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);}
+.alert-card .ai{font-size:18px;flex-shrink:0;margin-top:1px;}
+.alert-card .at{font-size:13px;font-weight:600;margin-bottom:2px;}
+.alert-card .as{font-size:12px;color:var(--t2);}
+.alert-card.danger .at{color:var(--rd);}
+.alert-card.warn .at{color:var(--yl);}
+.alert-card.info .at{color:var(--bl);}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.stat{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:11px 6px;text-align:center;}
+.sv{font-size:22px;font-weight:700;font-family:'JetBrains Mono';}
+.sv.g{color:var(--gr)}.sv.r{color:var(--rd)}.sv.o{color:var(--or)}.sv.y{color:var(--yl)}
+.sl{font-size:10px;color:var(--t3);margin-top:1px;}
+
+/* SCAN */
+.scan-zone{border:2px dashed var(--bd);border-radius:var(--r);padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--s2);}
+.scan-zone:active,.scan-zone.drag{border-color:var(--or);background:rgba(255,90,31,.05);}
+.scan-zone .sz-i{font-size:40px;margin-bottom:8px;}
+.scan-zone h3{font-size:15px;font-weight:600;margin-bottom:4px;}
+.scan-zone p{font-size:12px;color:var(--t3);}
+.udi-hint{margin-top:7px;font-size:11px;color:var(--or);font-weight:500;}
+.cam-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+
+/* PREVIEW */
+#preview-wrap{display:none;margin-top:12px;border-radius:var(--r);overflow:hidden;border:1px solid var(--bd);position:relative;}
+#preview-wrap img{width:100%;max-height:200px;object-fit:contain;background:#0d0d0d;}
+.close-btn{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.75);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+/* RESULT */
+.result-box{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:12px;margin-top:10px;display:none;}
+.result-box.show{display:block;}
+.rf{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd);font-size:13px;}
+.rf:last-child{border-bottom:none;}
+.rlb{color:var(--t3);font-size:12px;}
+.rvl{font-weight:500;font-family:'JetBrains Mono';font-size:11px;text-align:right;max-width:62%;}
+.rvl.match{color:var(--gr);font-family:'Noto Sans KR';font-size:12px;}
+.rvl.warn{color:var(--yl);}
+.rvl.red{color:var(--rd);}
+
+/* MODE BUTTONS */
+.mode-wrap{display:flex;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:3px;gap:3px;margin-bottom:12px;}
+.mode-btn{flex:1;padding:8px 6px;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:var(--t3);transition:all .15s;font-family:'Noto Sans KR',sans-serif;}
+.mode-btn.in.active{background:var(--gr);color:#fff;}
+.mode-btn.delivery.active{background:var(--rd);color:#fff;}
+.mode-btn.sample.active{background:var(--bl);color:#fff;}
+
+/* FORM */
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:9px;}
+.fg label{font-size:11px;font-weight:600;color:var(--t2);letter-spacing:.02em;}
+.fg input,.fg select,.fg textarea{background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:9px 11px;color:var(--t1);font-size:14px;outline:none;font-family:'Noto Sans KR',sans-serif;width:100%;transition:border-color .15s;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--or);}
+.fg textarea{resize:none;min-height:52px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+/* BUTTONS */
+.btn{padding:9px 16px;border:none;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:5px;font-family:'Noto Sans KR',sans-serif;}
+.btn-or{background:var(--or);color:#fff;}.btn-or:active{background:var(--ord);}
+.btn-ghost{background:transparent;color:var(--t2);border:1px solid var(--bd);}.btn-ghost:active{border-color:var(--or);color:var(--or);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-full{width:100%;padding:13px;font-size:14px;margin-top:12px;border-radius:var(--r);}
+.btn-danger{background:transparent;color:var(--rd);border:1px solid rgba(239,68,68,.4);}
+.btn-gr{background:rgba(34,197,94,.15);color:var(--gr);border:1px solid rgba(34,197,94,.3);}
+
+/* QUICK PRODUCT GRID */
+.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;}
+.qp{background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:8px 6px;text-align:center;cursor:pointer;transition:all .15s;}
+.qp:active,.qp.selected{border-color:var(--or);background:rgba(255,90,31,.08);}
+.qp .qn{font-size:11px;font-weight:600;color:var(--t1);line-height:1.3;}
+.qp .qm{font-size:9px;color:var(--t3);font-family:'JetBrains Mono';margin-top:2px;}
+.qp .qs{font-size:14px;font-weight:700;margin-top:4px;}
+
+/* TABLE */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:var(--s2);color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;padding:9px 10px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--bd);transition:background .1s;}
+tbody tr:active{background:var(--s2);}
+tbody td{padding:8px 10px;color:var(--t1);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;}
+.badge.in{background:rgba(34,197,94,.15);color:var(--gr);}
+.badge.delivery{background:rgba(239,68,68,.15);color:var(--rd);}
+.badge.sample{background:rgba(59,130,246,.15);color:var(--bl);}
+.mono{font-family:'JetBrains Mono';font-size:11px;color:var(--t2);}
+
+/* SEARCH */
+.sr{display:flex;gap:6px;margin-bottom:10px;}
+.sr input{flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:9px 12px;color:var(--t1);font-size:14px;outline:none;font-family:'Noto Sans KR',sans-serif;}
+.sr input:focus{border-color:var(--or);}
+.sr select{background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:9px 8px;color:var(--t1);font-size:12px;outline:none;font-family:'Noto Sans KR',sans-serif;min-width:75px;}
+
+/* STOCK GRID */
+.sg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.sc{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:12px;}
+.sn{font-size:12px;font-weight:600;color:var(--t1);margin-bottom:1px;}
+.sm2{font-size:10px;color:var(--t3);font-family:'JetBrains Mono';margin-bottom:6px;}
+.sq{font-size:24px;font-weight:700;font-family:'JetBrains Mono';}
+.sqs{font-size:10px;color:var(--t3);}
+.stock-bar{height:3px;border-radius:2px;margin-top:6px;background:var(--bd);}
+.stock-fill{height:100%;border-radius:2px;transition:width .3s;}
+
+/* DESTINATION */
+.dest-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.dt{padding:5px 10px;border-radius:20px;font-size:12px;background:var(--s3);color:var(--t2);border:1px solid var(--bd);cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.dt:active{background:var(--rd);border-color:var(--rd);color:#fff;}
+
+/* SECTION HEADER */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sh h2{font-size:16px;font-weight:700;}
+
+/* DASHBOARD CHART AREA */
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.chart-box{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:12px;}
+.chart-box .ct{font-size:11px;color:var(--t3);margin-bottom:8px;font-weight:600;}
+.bar-chart{display:flex;flex-direction:column;gap:5px;}
+.bc-row{display:flex;align-items:center;gap:6px;font-size:11px;}
+.bc-lbl{width:55px;color:var(--t2);text-align:right;flex-shrink:0;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bc-bar-wrap{flex:1;background:var(--bd);border-radius:3px;height:14px;overflow:hidden;}
+.bc-bar{height:100%;border-radius:3px;transition:width .4s;}
+.bc-val{width:28px;text-align:right;color:var(--t2);font-size:10px;font-family:'JetBrains Mono';}
+
+/* MONTH PICKER */
+.month-tabs{display:flex;gap:4px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;}
+.month-tabs::-webkit-scrollbar{display:none;}
+.mtab{padding:5px 10px;border-radius:20px;font-size:11px;background:var(--s2);color:var(--t3);border:1px solid var(--bd);cursor:pointer;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;}
+.mtab.active{background:var(--or);color:#fff;border-color:var(--or);}
+
+/* LOADING */
+#loading{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+#loading.show{display:flex;}
+.spin{width:40px;height:40px;border:3px solid var(--bd);border-top-color:var(--or);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loading p{color:var(--t2);font-size:13px;}
+
+/* TOAST */
+#toast{position:fixed;bottom:calc(68px + var(--safe-b) + 10px);left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--bd);border-radius:var(--rs);padding:10px 16px;font-size:13px;font-weight:500;color:var(--t1);opacity:0;transition:opacity .2s;z-index:9999;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;max-width:90vw;text-align:center;}
+#toast.show{opacity:1;}
+#toast.ok{border-color:var(--gr);color:var(--gr);}
+#toast.err{border-color:var(--rd);color:var(--rd);}
+#toast.warn{border-color:var(--yl);color:var(--yl);}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:500;align-items:flex-end;justify-content:center;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r) var(--r) 0 0;padding:18px;padding-bottom:calc(18px + var(--safe-b));width:100%;max-width:540px;max-height:85vh;overflow-y:auto;}
+.modal h2{font-size:15px;font-weight:700;margin-bottom:12px;}
+.modal-ft{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+.pull-bar{width:36px;height:4px;background:var(--bd);border-radius:2px;margin:0 auto 14px;}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-thumb{background:var(--s3);border-radius:2px;}
+.empty{text-align:center;padding:36px 16px;color:var(--t3);}
+.empty .ei{font-size:32px;margin-bottom:8px;}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--rd);display:inline-block;margin-left:5px;}
+.dot.ok{background:var(--gr);}
+
+/* LOT TRACK */
+.lot-result{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:12px;margin-top:10px;}
+.lot-result .lrt{font-size:12px;color:var(--t3);margin-bottom:8px;}
+.lot-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px;}
+.lot-item:last-child{border-bottom:none;}
+
+/* INLINE ROW EDIT */
+.edit-row{background:rgba(255,90,31,.05);border-left:2px solid var(--or);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-l">
+    <img src="data:image/png;base64,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" class="logo" alt="logo">
+    <div class="brand"><span>Orange</span>Medics</div>
+  </div>
+  <div class="hdr-r">
+    <button class="btn btn-ghost btn-sm" onclick="showModal('upload-modal')">📥</button>
+    <button class="btn btn-or btn-sm" onclick="exportExcel()">📤</button>
+  </div>
+</header>
+
+<div class="scroll" id="scroll-area">
+
+<!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+<div id="panel-dash" class="panel active">
+  <div class="sh"><h2>대시보드</h2>
+    <span id="today-date" style="font-size:12px;color:var(--t3)"></span>
+  </div>
+
+  <!-- Alerts -->
+  <div id="alert-area"></div>
+
+  <!-- Stats -->
+  <div class="stats" id="stats-bar"></div>
+
+  <!-- Charts -->
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="ct">제품별 재고</div>
+      <div class="bar-chart" id="stock-chart"></div>
+    </div>
+    <div class="chart-box">
+      <div class="ct">납품처별 출고 (이번달)</div>
+      <div class="bar-chart" id="dest-chart"></div>
+    </div>
+  </div>
+
+  <!-- Monthly summary -->
+  <div class="card">
+    <div class="card-t">월별 요약</div>
+    <div class="month-tabs" id="month-tabs"></div>
+    <div id="month-summary"></div>
+  </div>
+
+  <!-- LOT Tracker -->
+  <div class="card">
+    <div class="card-t">LOT 추적 조회</div>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="lot-search" placeholder="LOT 번호 입력..." style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:9px 11px;color:var(--t1);font-size:14px;outline:none;font-family:'Noto Sans KR',sans-serif;">
+      <button class="btn btn-or btn-sm" onclick="searchLot()">추적</button>
+    </div>
+    <div id="lot-result-area"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SCAN ═══════════════════ -->
+<div id="panel-scan" class="panel">
+  <div class="card">
+    <div class="card-t">출고 / 입고 선택</div>
+    <div class="mode-wrap">
+      <button class="mode-btn in active" id="btn-in" onclick="setMode('in')">⬆ 입고</button>
+      <button class="mode-btn delivery" id="btn-delivery" onclick="setMode('delivery')">⬇ 납품</button>
+      <button class="mode-btn sample" id="btn-sample" onclick="setMode('sample')">🔬 샘플</button>
+    </div>
+
+    <!-- Quick product select -->
+    <div class="card-t">빠른 제품 선택 (스캔 없이)</div>
+    <div class="quick-grid" id="quick-grid"></div>
+
+    <div class="card-t">UDI 바코드 스캔</div>
+
+    <!-- 바코드 실시간 스캔 뷰어 -->
+    <div id="barcode-wrap" style="display:none;position:relative;border-radius:var(--r);overflow:hidden;background:#000;margin-bottom:10px;">
+      <video id="barcode-video" style="width:100%;max-height:260px;object-fit:cover;display:block;" playsinline muted></video>
+      <!-- 조준선 -->
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+        <div style="width:72%;max-width:280px;height:80px;border:2px solid var(--or);border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,0.35);"></div>
+      </div>
+      <div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:11px;color:rgba(255,255,255,0.8);">
+        네모난 코드(DataMatrix) 또는 긴 바코드를 사각형 안에 맞추세요
+      </div>
+      <button onclick="stopBarcodeScanner()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+
+    <!-- 스캔 버튼들 -->
+    <div id="scan-status" style="text-align:center;font-size:12px;color:var(--or);min-height:18px;margin-bottom:8px;display:none;"></div>
+    <div class="cam-btns">
+      <button class="btn btn-or" id="barcode-scan-btn" onclick="startBarcodeScanner()">
+        📷 바코드 스캔 <span style="font-size:10px;opacity:0.8;">(무료)</span>
+      </button>
+      <button class="btn btn-ghost" onclick="document.getElementById('file-in').click()">
+        🖼 사진으로 스캔 <span style="font-size:10px;opacity:0.8;">(AI)</span>
+      </button>
+    </div>
+    <input type="file" id="cam-in" accept="image/*" capture="environment" style="display:none" onchange="handleImage(this)">
+    <input type="file" id="file-in" accept="image/*" style="display:none" onchange="handleImage(this)">
+
+    <div id="preview-wrap">
+      <img id="preview-img" src="" alt="">
+      <button class="close-btn" onclick="clearPreview()">✕</button>
+    </div>
+
+    <div class="result-box" id="result-box">
+      <div class="card-t" style="margin-bottom:8px">인식 결과</div>
+      <div class="rf"><span class="rlb">(01) UDI-DI</span><span class="rvl mono" id="r-di">-</span></div>
+      <div class="rf"><span class="rlb">(10) 로트번호</span><span class="rvl mono" id="r-lot">-</span></div>
+      <div class="rf"><span class="rlb">(17) 유효기간</span><span class="rvl mono" id="r-exp">-</span></div>
+      <div class="rf"><span class="rlb">제품명</span><span class="rvl" id="r-name">-</span></div>
+      <div class="rf"><span class="rlb">모델명</span><span class="rvl mono" id="r-model">-</span></div>
+      <div class="rf" id="r-exp-warn-row" style="display:none">
+        <span class="rlb">⚠ 유효기간 경고</span>
+        <span class="rvl red" id="r-exp-warn">-</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="entry-form" style="display:none">
+    <div class="card-t">저장 정보</div>
+    <div class="form-row">
+      <div class="fg"><label>날짜</label><input type="date" id="f-date"></div>
+      <div class="fg"><label>수량</label><input type="number" id="f-qty" value="1" min="1" inputmode="numeric"></div>
+    </div>
+    <div class="fg" id="dest-group" style="display:none"><label>납품처</label><select id="f-dest"></select></div>
+    <div class="fg"><label>메모</label><textarea id="f-memo" placeholder="비고..."></textarea></div>
+    <button class="btn btn-or btn-full" onclick="submitEntry()"><span id="submit-label">입고 저장</span></button>
+  </div>
+</div>
+
+<!-- ═══════════════════ HISTORY ═══════════════════ -->
+<div id="panel-history" class="panel">
+  <div class="sh"><h2>이력 조회</h2>
+    <button class="btn btn-ghost btn-sm" onclick="exportExcel()">📤</button>
+  </div>
+  <div class="sr">
+    <input type="text" id="search-input" placeholder="제품·날짜·납품처·LOT·코드..." oninput="renderHistory()">
+    <select id="filter-mode" onchange="renderHistory()">
+      <option value="">전체</option>
+      <option value="in">입고</option>
+      <option value="delivery">납품</option>
+      <option value="sample">샘플</option>
+    </select>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>#</th><th>날짜</th><th>유형</th><th>제품명</th><th>모델</th>
+          <th>수량</th><th>재고</th><th>납품처</th><th>LOT</th><th>유효기간</th><th>메모</th><th>-</th>
+        </tr></thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ STOCK ═══════════════════ -->
+<div id="panel-stock" class="panel">
+  <div class="sh"><h2>재고 현황</h2></div>
+  <!-- Safety stock warning -->
+  <div id="safety-warnings"></div>
+  <div class="sg" id="stock-grid"></div>
+</div>
+
+<!-- ═══════════════════ SETTINGS ═══════════════════ -->
+<div id="panel-settings" class="panel">
+  <div class="card">
+    <div class="card-t">Claude AI API 키 <span class="dot" id="api-dot"></span></div>
+    <div class="fg">
+      <label>Anthropic API Key</label>
+      <input type="password" id="api-key" placeholder="sk-ant-..." oninput="saveApiKey()">
+      <span style="font-size:11px;color:var(--t3);margin-top:2px">입력 시 카메라 UDI 자동 인식이 활성화됩니다.</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-t">안전재고 설정 (제품별 최소 수량)</div>
+    <div id="safety-stock-list"></div>
+  </div>
+  <div class="card">
+    <div class="card-t">납품처 관리</div>
+    <div class="dest-list" id="dest-list"></div>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="new-dest" placeholder="새 납품처..." style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:9px 11px;color:var(--t1);font-size:14px;outline:none;font-family:'Noto Sans KR',sans-serif;">
+      <button class="btn btn-or" onclick="addDest()">추가</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-t">제품 목록</div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>제품명</th><th>모델</th><th>UDI-DI</th><th>현재고</th><th>안전재고</th></tr></thead>
+        <tbody id="products-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-t">데이터 관리</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="showModal('upload-modal')">📥 엑셀 가져오기</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportExcel()">📤 엑셀 내보내기</button>
+      <button class="btn btn-danger btn-sm" onclick="clearData()">🗑 초기화</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /scroll -->
+
+<!-- BOTTOM TAB BAR -->
+<nav class="tabbar">
+  <button class="tab-btn active" id="tab-dash" onclick="switchTab('dash')">
+    <span class="ti">📊</span>대시보드
+  </button>
+  <button class="tab-btn" id="tab-scan" onclick="switchTab('scan')">
+    <span class="ti">📷</span>스캔
+  </button>
+  <button class="tab-btn" id="tab-history" onclick="switchTab('history')">
+    <span class="ti">📋</span>이력
+  </button>
+  <button class="tab-btn" id="tab-stock" onclick="switchTab('stock')">
+    <span class="ti">📦</span>재고
+  </button>
+  <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">
+    <span class="ti">⚙️</span>설정
+  </button>
+</nav>
+
+<!-- MODALS -->
+<div class="modal-bg" id="upload-modal">
+  <div class="modal">
+    <div class="pull-bar"></div>
+    <h2>📥 기존 엑셀 가져오기</h2>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:12px">기존 재고 엑셀을 불러와 현재 데이터와 합산합니다.</p>
+    <div class="scan-zone" style="padding:20px" onclick="document.getElementById('xl-in').click()">
+      <div class="sz-i">📊</div>
+      <h3>엑셀 파일 선택</h3><p>.xlsx</p>
+    </div>
+    <input type="file" id="xl-in" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)">
+    <div class="modal-ft"><button class="btn btn-ghost" onclick="closeModal('upload-modal')">취소</button></div>
+  </div>
+</div>
+
+<!-- EDIT RECORD MODAL -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <div class="pull-bar"></div>
+    <h2>✏️ 기록 수정</h2>
+    <input type="hidden" id="edit-id">
+    <div class="form-row">
+      <div class="fg"><label>날짜</label><input type="date" id="edit-date"></div>
+      <div class="fg"><label>수량</label><input type="number" id="edit-qty" min="1" inputmode="numeric"></div>
+    </div>
+    <div class="fg"><label>납품처</label><select id="edit-dest"></select></div>
+    <div class="fg"><label>메모</label><textarea id="edit-memo"></textarea></div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('edit-modal')">취소</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRecord()">삭제</button>
+      <button class="btn btn-or" onclick="saveEditRecord()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading"><div class="spin"></div><p id="loading-msg">처리 중...</p></div>
+<div id="toast"></div>
+
+<script>
+// ─── PRODUCT DB ───────────────────────────────────────────
+const PRODUCTS = [
+  {name:'돌핀38 (Dolphin-SIS)',  model:'DP-SIS',   di:'08800211800060', kw:['돌핀38','돌핀','dolphin','sis','범용주입','배액']},
+  {name:'돌핀45 (Dolphin-SIS)',  model:'DP-SISL',  di:'08800211800077', kw:['돌핀45','돌핀','dolphin','sisl','배액']},
+  {name:'돌핀2-38 (Dolphin-SIS)',model:'DP-SIS2',  di:'08800211800084', kw:['돌핀2-38','돌핀2','dolphin','sis2','범용주입']},
+  {name:'돌핀2-45 (Dolphin-SIS)',model:'DP-SIS2L', di:'08800211800091', kw:['돌핀2-45','돌핀2','dolphin','sis2l']},
+  {name:'스파이더포트 (SPIDER PORT)', model:'SP-12', di:'08800211800008', kw:['스파이더','스파이더포트','spider','개창','포트']},
+  {name:'듀마컵28 (DUMA-CUP)', model:'CLB28', di:'08800211800015', kw:['듀마컵28','듀마컵','듀마','duma','자궁','풍선','카테터','clb28']},
+  {name:'듀마컵32 (DUMA-CUP)', model:'CLB32', di:'08800211800022', kw:['듀마컵32','듀마컵','듀마','duma','자궁','풍선','clb32']},
+  {name:'듀마컵36 (DUMA-CUP)', model:'CLB36', di:'08800211800039', kw:['듀마컵36','듀마컵','듀마','duma','clb36']},
+  {name:'듀마컵40 (DUMA-CUP)', model:'CLB40', di:'08800211800046', kw:['듀마컵40','듀마컵','듀마','duma','clb40']},
+  {name:'듀마 (Dr. Lee\'s DUMA)', model:'DUMA-34', di:'08800211800190', kw:['듀마34','듀마','duma','기자','수동','duma-34']},
+  {name:'듀마 (Dr. Lee\'s DUMA)', model:'DUMA-28', di:'08800211800183', kw:['듀마28','듀마','duma','기자','수동','duma-28']},
+];
+
+const DEFAULT_DESTS = ['충남대병원','세종충남대병원','삼성메디케어','비제이','우영MD','한국이지메디','진주경상대병원'];
+
+// ─── STATE ────────────────────────────────────────────────
+let mode = 'in';
+let currentScan = {};
+let selectedQuick = null;
+
+const LS = k => { try{ return JSON.parse(localStorage.getItem(k)); }catch{ return null; } };
+const SS = (k,v) => localStorage.setItem(k, JSON.stringify(v));
+
+const loadRecords    = () => LS('records') || [];
+const loadDests      = () => LS('destinations') || [...DEFAULT_DESTS];
+const loadApiKey     = () => localStorage.getItem('apiKey') || '';
+const loadSafetyStock= () => LS('safetyStock') || {};
+
+// ─── INIT ─────────────────────────────────────────────────
+window.onload = () => {
+  document.getElementById('f-date').value = today();
+  document.getElementById('api-key').value = loadApiKey();
+  document.getElementById('today-date').textContent = new Date().toLocaleDateString('ko-KR');
+  updateApiDot();
+  renderAll();
+  setMode('in');
+};
+
+function today() { return new Date().toISOString().split('T')[0]; }
+function renderAll() {
+  renderStats(); renderAlerts(); renderDashCharts(); renderMonthTabs();
+  renderHistory(); renderStock(); renderDestSelect(); renderDestTags();
+  renderProductsTable(); renderSafetyStockList(); renderQuickGrid();
+}
+
+// ─── TAB ──────────────────────────────────────────────────
+const TABS = ['dash','scan','history','stock','settings'];
+function switchTab(id) {
+  TABS.forEach(t => {
+    document.getElementById('panel-'+t).classList.toggle('active', t===id);
+    document.getElementById('tab-'+t).classList.toggle('active', t===id);
+  });
+  document.getElementById('scroll-area').scrollTop = 0;
+  if(id==='history') renderHistory();
+  if(id==='stock') { renderStock(); renderSafetyWarnings(); }
+  if(id==='settings') { renderDestTags(); renderProductsTable(); renderSafetyStockList(); }
+  if(id==='dash') { renderAlerts(); renderDashCharts(); renderMonthTabs(); }
+}
+
+// ─── MODE ─────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  ['in','delivery','sample'].forEach(b => document.getElementById('btn-'+b).classList.toggle('active', b===m));
+  const isOut = m!=='in';
+  document.getElementById('dest-group').style.display = isOut ? 'flex' : 'none';
+  const lbl = {in:'⬆ 입고 저장', delivery:'⬇ 납품 출고 저장', sample:'🔬 샘플 출고 저장'};
+  document.getElementById('submit-label').textContent = lbl[m];
+}
+
+// ─── QUICK GRID ───────────────────────────────────────────
+function renderQuickGrid() {
+  const sm = stockMap();
+  const qg = document.getElementById('quick-grid');
+  qg.innerHTML = PRODUCTS.map((p,i) => {
+    const k = p.di || p.model;
+    const v = sm[k] || 0;
+    const col = v <= 0 ? 'var(--rd)' : v <= 5 ? 'var(--yl)' : 'var(--gr)';
+    const short = p.name.split(' ')[0];
+    return `<div class="qp" id="qp-${i}" onclick="selectQuick(${i})">
+      <div class="qn">${short}</div>
+      <div class="qm">${p.model}</div>
+      <div class="sq" style="color:${col}">${v}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectQuick(idx) {
+  selectedQuick = idx;
+  document.querySelectorAll('.qp').forEach((el,i) => el.classList.toggle('selected', i===idx));
+  const p = PRODUCTS[idx];
+  currentScan = {di: p.di, lot:'', exp:'', name: p.name, model: p.model, fromQuick: true};
+  document.getElementById('result-box').classList.remove('show');
+  document.getElementById('entry-form').style.display = 'block';
+  document.getElementById('r-exp-warn-row').style.display = 'none';
+  renderDestSelect();
+  setMode(mode);
+  toast(`${p.name.split(' ')[0]} 선택됨`, 'ok');
+  // show simplified result
+  document.getElementById('r-di').textContent = p.di || '-';
+  document.getElementById('r-lot').textContent = '직접입력';
+  document.getElementById('r-exp').textContent = '-';
+  document.getElementById('r-name').textContent = p.name;
+  document.getElementById('r-name').className = 'rvl match';
+  document.getElementById('r-model').textContent = p.model;
+  document.getElementById('result-box').classList.add('show');
+}
+
+// ─── SCAN ─────────────────────────────────────────────────
+function handleImage(input) {
+  if(!input.files[0]) return;
+  const file = input.files[0];
+  const mime = file.type || 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = e => {
+    const src = e.target.result;
+    document.getElementById('preview-img').src = src;
+    document.getElementById('preview-wrap').style.display = 'block';
+    selectedQuick = null;
+    document.querySelectorAll('.qp').forEach(el => el.classList.remove('selected'));
+    analyzeUDI(src.split(',')[1], mime);
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPreview() {
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('preview-img').src = '';
+  document.getElementById('result-box').classList.remove('show');
+  document.getElementById('entry-form').style.display = 'none';
+  document.getElementById('cam-in').value = '';
+  document.getElementById('file-in').value = '';
+  currentScan = {};
+}
+
+// ─── CLAUDE API ───────────────────────────────────────────
+// ─── BARCODE SCANNER (무료, ZXing) ───────────────────────
+let barcodeReader = null;
+let barcodeStream = null;
+
+async function startBarcodeScanner() {
+  const wrap = document.getElementById('barcode-wrap');
+  const video = document.getElementById('barcode-video');
+  const btn = document.getElementById('barcode-scan-btn');
+  const status = document.getElementById('scan-status');
+
+  // ZXing 로드 확인
+  if(typeof ZXing === 'undefined') {
+    toast('바코드 스캔 라이브러리 로딩 중... 잠시 후 다시 시도해주세요', 'warn');
+    return;
+  }
+
+  try {
+    // 카메라 스트림 시작
+    barcodeStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = barcodeStream;
+    await video.play();
+    wrap.style.display = 'block';
+    status.style.display = 'block';
+    status.textContent = '🔍 스캔 중...';
+    btn.textContent = '⏹ 스캔 중지';
+    btn.onclick = stopBarcodeScanner;
+
+    // ZXing MultiFormat reader (DataMatrix + QR + Code128 등 모두 지원)
+    const hints = new Map();
+    const formats = [
+      ZXing.BarcodeFormat.DATA_MATRIX,
+      ZXing.BarcodeFormat.QR_CODE,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.EAN_13,
+    ];
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+    barcodeReader = new ZXing.MultiFormatReader();
+    barcodeReader.setHints(hints);
+
+    scanFrame(video);
+  } catch(e) {
+    toast('카메라 권한이 필요합니다. 설정에서 허용해주세요.', 'err');
+    stopBarcodeScanner();
+  }
+}
+
+function scanFrame(video) {
+  if(!barcodeStream) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  try {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const luminance = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+    const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
+    const result = barcodeReader.decode(binaryBitmap);
+    if(result) {
+      // 스캔 성공
+      stopBarcodeScanner();
+      const raw = result.getText();
+      parseGS1(raw);
+      return;
+    }
+  } catch(e) {
+    // 아직 못 읽음 — 계속 시도
+  }
+  requestAnimationFrame(() => scanFrame(video));
+}
+
+function stopBarcodeScanner() {
+  if(barcodeStream) {
+    barcodeStream.getTracks().forEach(t => t.stop());
+    barcodeStream = null;
+  }
+  barcodeReader = null;
+  document.getElementById('barcode-wrap').style.display = 'none';
+  document.getElementById('scan-status').style.display = 'none';
+  const btn = document.getElementById('barcode-scan-btn');
+  btn.textContent = '📷 바코드 스캔 (무료)';
+  btn.onclick = startBarcodeScanner;
+}
+
+// GS1 UDI 파싱 — (01)(10)(17) 추출
+function parseGS1(raw) {
+  if(!raw) { toast('코드를 읽지 못했습니다', 'err'); return; }
+
+  let di = '', lot = '', exp = '';
+
+  // GS1-128 / DataMatrix: AI 괄호 방식  예) (01)08800211800022(10)250609(17)280610
+  const bracketDI  = raw.match(/\(01\)\s*([\d\s]{10,18})/);
+  const bracketLOT = raw.match(/\(10\)\s*([^\(]{1,20})/);
+  const bracketEXP = raw.match(/\(17\)\s*([\d\s]{6,8})/);
+
+  if(bracketDI) {
+    di  = (bracketDI[1]  || '').replace(/\s/g,'');
+    lot = (bracketLOT ? bracketLOT[1] : '').trim();
+    exp = (bracketEXP ? bracketEXP[1] : '').replace(/\s/g,'');
+  } else {
+    // 괄호 없는 GS1 연속 포맷: AI가 고정길이로 연속됨
+    // AI 01 = 14자리 → AI 17 = 6자리 → AI 10 = 가변(FNC1로 끝)
+    const plain = raw.replace(/\s/g,'');
+    if(plain.startsWith('01') && plain.length >= 16) {
+      di = plain.substring(2, 16);
+      let rest = plain.substring(16);
+      // 17 (유효기간 6자리)
+      const expMatch = rest.match(/17(\d{6})/);
+      if(expMatch) { exp = expMatch[1]; rest = rest.replace('17'+expMatch[1],''); }
+      // 10 (로트번호)
+      const lotMatch = rest.match(/10([A-Za-z0-9]{1,20})/);
+      if(lotMatch) lot = lotMatch[1];
+    } else {
+      // 인식은 됐지만 UDI 형식이 아닌 경우
+      toast('UDI 코드가 아닙니다: ' + raw.substring(0,30), 'warn');
+      return;
+    }
+  }
+
+  // DI 앞 0 보정 (14자리 확보)
+  if(di && di.length < 14) di = di.padStart(14,'0');
+
+  const prod = matchProduct(di);
+  showResultBox({
+    di,
+    lot,
+    exp: fmtExp(exp),
+    ...prod
+  });
+  toast('✅ 바코드 인식 성공!', 'ok');
+}
+
+async function analyzeUDI(b64, mime) {
+  const apiKey = loadApiKey();
+  if(!apiKey) { toast('설정 탭에서 API 키를 입력해주세요', 'err'); showResultBox({di:'',lot:'',exp:'',name:'API 키 없음',model:''}); return; }
+  showLoading('Claude AI가 UDI 코드 인식 중...');
+  try {
+    const sys = `의료기기 UDI(Unique Device Identifier) 코드 전문 인식 AI입니다.
+GS1 AI(Application Identifier) 규칙:
+- (01): 14자리 GTIN. 예) (01)08800211800022 → "08800211800022"
+- (10): 로트번호. 예) (10)250609 → "250609"
+- (17): 사용기한 YYMMDD. 예) (17)280610 → "280610"
+핵심 규칙: 숫자 사이 공백 완전 무시. (01)0 8800 2118 00022 = "08800211800022"
+(01)은 반드시 14자리. 다음 ( 괄호가 나오기 전까지가 해당 AI 값.
+JSON만 응답: {"di":"14자리","lot":"로트번호","exp":"YYMMDD"}`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:sys,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mime,data:b64}},
+          {type:'text',text:'UDI 코드 (01)(10)(17)를 JSON으로 추출하세요.'}
+        ]}]
+      })
+    });
+    const data = await res.json();
+    if(data.error) throw new Error(data.error.message);
+    const text = (data.content||[]).map(c=>c.text||'').join('');
+    const m = text.match(/\{[\s\S]*?\}/);
+    if(m) {
+      const p = JSON.parse(m[0]);
+      const prod = matchProduct(p.di||'');
+      showResultBox({di:p.di||'',lot:p.lot||'',exp:fmtExp(p.exp||''),...prod});
+    } else {
+      showResultBox({di:'',lot:'',exp:'',name:'인식 실패',model:''}); toast('UDI 인식 실패. 더 선명하게 찍어주세요', 'err');
+    }
+  } catch(e) { toast('오류: '+e.message, 'err'); showResultBox({di:'',lot:'',exp:'',name:'오류',model:''}); }
+  finally { hideLoading(); }
+}
+
+function fmtExp(e) {
+  if(!e||e.length<6) return e;
+  return '20'+e.slice(0,2)+'-'+e.slice(2,4)+'-'+e.slice(4,6);
+}
+
+function matchProduct(di) {
+  if(!di) return {name:'',model:''};
+  const c = di.replace(/\s/g,'');
+  const p = PRODUCTS.find(x => x.di && c.endsWith(x.di.slice(-10)));
+  return p ? {name:p.name, model:p.model} : {name:'미등록 제품', model:''};
+}
+
+function showResultBox(d) {
+  currentScan = d;
+  document.getElementById('r-di').textContent = d.di||'-';
+  document.getElementById('r-lot').textContent = d.lot||'-';
+  document.getElementById('r-exp').textContent = d.exp||'-';
+  const nameEl = document.getElementById('r-name');
+  nameEl.textContent = d.name||'-';
+  nameEl.className = 'rvl ' + (d.name && !['미등록 제품','인식 실패','오류','API 키 없음',''].includes(d.name) ? 'match' : 'warn');
+  document.getElementById('r-model').textContent = d.model||'-';
+
+  // Expiry warning
+  const warnRow = document.getElementById('r-exp-warn-row');
+  if(d.exp && d.exp.length >= 7) {
+    const expDate = new Date(d.exp);
+    const now = new Date();
+    const days = Math.ceil((expDate - now) / (1000*60*60*24));
+    if(days < 180) {
+      warnRow.style.display = 'flex';
+      const warnEl = document.getElementById('r-exp-warn');
+      if(days < 0) { warnEl.textContent = '만료됨!'; warnEl.className = 'rvl red'; }
+      else { warnEl.textContent = `D-${days} (${days < 90 ? '⚠ 90일 이내' : '주의'})`;
+             warnEl.className = 'rvl ' + (days < 90 ? 'red' : 'warn'); }
+    } else { warnRow.style.display = 'none'; }
+  } else { warnRow.style.display = 'none'; }
+
+  document.getElementById('result-box').classList.add('show');
+  document.getElementById('entry-form').style.display = 'block';
+  renderDestSelect();
+  setMode(mode);
+}
+
+// ─── SUBMIT ───────────────────────────────────────────────
+function submitEntry() {
+  if(!currentScan.di && !currentScan.name) { toast('먼저 제품을 선택하거나 스캔하세요', 'err'); return; }
+  const records = loadRecords();
+  const qty = parseInt(document.getElementById('f-qty').value)||1;
+  const date = document.getElementById('f-date').value;
+  const dest = mode!=='in' ? document.getElementById('f-dest').value : '';
+  const memo = document.getElementById('f-memo').value;
+  const diClean = (currentScan.di||'').replace(/\s/g,'');
+
+  // Check expiry before OUT
+  if(mode !== 'in' && currentScan.exp && currentScan.exp.length >= 7) {
+    const expDate = new Date(currentScan.exp);
+    if(expDate < new Date()) {
+      if(!confirm('⚠ 유효기간이 만료된 제품입니다!\n그래도 출고 처리하시겠습니까?')) return;
+    }
+  }
+
+  const prevStock = calcStock(records, diClean, currentScan.model);
+  const newStock = prevStock + (mode==='in' ? qty : -qty);
+  if(mode !== 'in' && newStock < 0) {
+    if(!confirm(`재고가 부족합니다 (현재 ${prevStock}개).\n계속 진행하시겠습니까?`)) return;
+  }
+
+  records.push({
+    id: Date.now(), seq: records.length+1,
+    date, mode,
+    name: currentScan.name||'', model: currentScan.model||'',
+    qty, stock: newStock, dest,
+    lot: currentScan.lot||'', exp: currentScan.exp||'',
+    di: diClean, memo
+  });
+  SS('records', records);
+  renderAll();
+  clearPreview();
+  document.getElementById('entry-form').style.display = 'none';
+  document.getElementById('f-qty').value = '1';
+  document.getElementById('f-memo').value = '';
+  selectedQuick = null;
+  document.querySelectorAll('.qp').forEach(el => el.classList.remove('selected'));
+  const msgs = {in:'✅ 입고 저장됨', delivery:'✅ 납품 출고 저장됨', sample:'✅ 샘플 출고 저장됨'};
+  toast(msgs[mode]+' ('+qty+'개)', 'ok');
+}
+
+function calcStock(recs, di, model) {
+  return recs.filter(r => (di && r.di===di) || (!di && r.model===model && model))
+             .reduce((s,r) => s+(r.mode==='in'?r.qty:-r.qty), 0);
+}
+
+function stockMap() {
+  const recs = loadRecords();
+  const sm = {};
+  PRODUCTS.forEach(p => { sm[p.di||p.model] = 0; });
+  recs.forEach(r => {
+    const k = r.di||r.model;
+    if(!(k in sm)) sm[k] = 0;
+    sm[k] += r.mode==='in' ? r.qty : -r.qty;
+  });
+  return sm;
+}
+
+// ─── ALERTS (Dashboard) ───────────────────────────────────
+function renderAlerts() {
+  const recs = loadRecords();
+  const sm = stockMap();
+  const safetyStk = loadSafetyStock();
+  const alerts = [];
+
+  // Expiry check (next 90 days)
+  const now = new Date();
+  const warn90 = new Set();
+  const warnExpired = new Set();
+  recs.filter(r => r.exp && r.exp.length >= 7).forEach(r => {
+    const days = Math.ceil((new Date(r.exp) - now) / (1000*60*60*24));
+    if(days < 0) warnExpired.add(r.di || r.model);
+    else if(days < 90) warn90.add(`${r.name.split(' ')[0]} (${r.exp})`);
+  });
+  warnExpired.forEach(k => {
+    const p = PRODUCTS.find(x => (x.di||x.model) === k);
+    if(p) alerts.push({type:'danger', icon:'🚫', title:`${p.name.split(' ')[0]} — 유효기간 만료`, sub:'즉시 격리 및 폐기 처리 필요'});
+  });
+  warn90.forEach(label => {
+    alerts.push({type:'warn', icon:'⏰', title:`유효기간 임박: ${label}`, sub:'90일 이내 만료 예정 제품'});
+  });
+
+  // Safety stock check
+  Object.entries(safetyStk).forEach(([k, minQty]) => {
+    const cur = sm[k] || 0;
+    if(cur <= minQty) {
+      const p = PRODUCTS.find(x => (x.di||x.model) === k);
+      const name = p ? p.name.split(' ')[0] : k;
+      alerts.push({type: cur <= 0 ? 'danger' : 'warn', icon: cur <= 0 ? '📦' : '⚠', title:`재고 부족: ${name} (${cur}개 남음)`, sub:`안전재고 ${minQty}개 이하`});
+    }
+  });
+
+  const area = document.getElementById('alert-area');
+  if(!alerts.length) { area.innerHTML = '<div class="alert-card info"><span class="ai">✅</span><div><div class="at">이상 없음</div><div class="as">유효기간 및 재고 모두 정상</div></div></div>'; return; }
+  area.innerHTML = alerts.map(a => `<div class="alert-card ${a.type}"><span class="ai">${a.icon}</span><div><div class="at">${a.title}</div><div class="as">${a.sub}</div></div></div>`).join('');
+}
+
+// ─── STATS ────────────────────────────────────────────────
+function renderStats() {
+  const r = loadRecords();
+  const totalIn  = r.filter(x=>x.mode==='in').reduce((s,x)=>s+x.qty,0);
+  const totalOut = r.filter(x=>x.mode!=='in').reduce((s,x)=>s+x.qty,0);
+  const todayN   = r.filter(x=>x.date===today()).length;
+  const sm = stockMap();
+  const tot = Object.values(sm).reduce((a,b)=>a+b,0);
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat"><div class="sv o">${tot}</div><div class="sl">총재고</div></div>
+    <div class="stat"><div class="sv g">${totalIn}</div><div class="sl">누적입고</div></div>
+    <div class="stat"><div class="sv r">${totalOut}</div><div class="sl">누적출고</div></div>
+    <div class="stat"><div class="sv">${todayN}</div><div class="sl">오늘</div></div>
+  `;
+}
+
+// ─── DASH CHARTS ──────────────────────────────────────────
+function renderDashCharts() {
+  const sm = stockMap();
+  const maxS = Math.max(...Object.values(sm), 1);
+  const stockEntries = PRODUCTS.filter((p,i,a) => a.findIndex(x=>x.model===p.model)===i)
+    .map(p => ({name: p.name.split(' ')[0], val: sm[p.di||p.model]||0}))
+    .sort((a,b)=>b.val-a.val).slice(0,6);
+  document.getElementById('stock-chart').innerHTML = stockEntries.map(e => {
+    const col = e.val <= 0 ? '#EF4444' : e.val <= 5 ? '#EAB308' : '#22C55E';
+    const pct = Math.round(e.val/maxS*100);
+    return `<div class="bc-row">
+      <div class="bc-lbl">${e.name}</div>
+      <div class="bc-bar-wrap"><div class="bc-bar" style="width:${pct}%;background:${col}"></div></div>
+      <div class="bc-val">${e.val}</div>
+    </div>`;
+  }).join('');
+
+  // Dest chart
+  const thisMonth = today().slice(0,7);
+  const recs = loadRecords();
+  const destTotals = {};
+  recs.filter(r=>r.mode!=='in'&&r.date&&r.date.startsWith(thisMonth)&&r.dest).forEach(r=>{destTotals[r.dest]=(destTotals[r.dest]||0)+r.qty;});
+  const destEntries = Object.entries(destTotals).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxD = Math.max(...Object.values(destTotals),1);
+  document.getElementById('dest-chart').innerHTML = destEntries.length ? destEntries.map(([d,v])=>`
+    <div class="bc-row">
+      <div class="bc-lbl">${d.length>5?d.slice(0,5)+'..':d}</div>
+      <div class="bc-bar-wrap"><div class="bc-bar" style="width:${Math.round(v/maxD*100)}%;background:var(--or)"></div></div>
+      <div class="bc-val">${v}</div>
+    </div>`).join('') : '<div style="color:var(--t3);font-size:11px;text-align:center;padding:10px">이번달 출고 없음</div>';
+}
+
+// ─── MONTHLY TABS ─────────────────────────────────────────
+let activeMonth = today().slice(0,7);
+function renderMonthTabs() {
+  const recs = loadRecords();
+  const months = [...new Set(recs.map(r=>r.date&&r.date.slice(0,7)).filter(Boolean))].sort().reverse().slice(0,6);
+  if(!months.includes(activeMonth)) activeMonth = months[0] || today().slice(0,7);
+  const tabs = document.getElementById('month-tabs');
+  tabs.innerHTML = months.map(m => `<div class="mtab ${m===activeMonth?'active':''}" onclick="selectMonth('${m}')">${m}</div>`).join('');
+  renderMonthSummary();
+}
+function selectMonth(m) { activeMonth = m; renderMonthTabs(); }
+function renderMonthSummary() {
+  const recs = loadRecords().filter(r=>r.date&&r.date.startsWith(activeMonth));
+  const inQty  = recs.filter(r=>r.mode==='in').reduce((s,r)=>s+r.qty,0);
+  const outQty = recs.filter(r=>r.mode!=='in').reduce((s,r)=>s+r.qty,0);
+  const byDest = {};
+  recs.filter(r=>r.mode!=='in'&&r.dest).forEach(r=>{byDest[r.dest]=(byDest[r.dest]||0)+r.qty;});
+  const destStr = Object.entries(byDest).map(([d,v])=>`${d}:${v}개`).join(', ') || '-';
+  document.getElementById('month-summary').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+      <div style="text-align:center"><div style="color:var(--gr);font-size:20px;font-weight:700;font-family:'JetBrains Mono'">${inQty}</div><div style="color:var(--t3)">입고</div></div>
+      <div style="text-align:center"><div style="color:var(--rd);font-size:20px;font-weight:700;font-family:'JetBrains Mono'">${outQty}</div><div style="color:var(--t3)">출고</div></div>
+      <div style="text-align:center"><div style="color:var(--t1);font-size:20px;font-weight:700;font-family:'JetBrains Mono'">${recs.length}</div><div style="color:var(--t3)">건수</div></div>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin-top:8px">납품처: ${destStr}</div>`;
+}
+
+// ─── LOT TRACKER ──────────────────────────────────────────
+function searchLot() {
+  const q = document.getElementById('lot-search').value.trim();
+  if(!q) return;
+  const recs = loadRecords().filter(r=>(r.lot||'').toLowerCase().includes(q.toLowerCase()));
+  const area = document.getElementById('lot-result-area');
+  if(!recs.length) { area.innerHTML = '<div style="font-size:12px;color:var(--t3);padding:10px 0">해당 LOT 번호 기록 없음</div>'; return; }
+  area.innerHTML = `<div class="lot-result">
+    <div class="lrt">LOT "${q}" 관련 기록 ${recs.length}건</div>
+    ${recs.map(r=>`<div class="lot-item">
+      <span>${r.date} · ${r.name?.split(' ')[0]||r.model} · LOT:${r.lot}</span>
+      <span class="badge ${r.mode==='in'?'in':r.mode==='delivery'?'delivery':'sample'}">${r.mode==='in'?'입고':r.mode==='delivery'?'납품':'샘플'}</span>
+    </div>`).join('')}
+  </div>`;
+}
+
+// ─── HISTORY ──────────────────────────────────────────────
+const KW_MAP = [
+  {words:['돌핀38'],              match:r=>r.name&&r.name.includes('돌핀38')},
+  {words:['돌핀45'],              match:r=>r.name&&r.name.includes('돌핀45')},
+  {words:['돌핀2-38'],            match:r=>r.name&&r.name.includes('돌핀2-38')},
+  {words:['돌핀2-45'],            match:r=>r.name&&r.name.includes('돌핀2-45')},
+  {words:['돌핀2','dolphin2'],    match:r=>r.name&&r.name.toLowerCase().includes('돌핀2')},
+  {words:['돌핀','dolphin'],      match:r=>r.name&&r.name.toLowerCase().includes('dolphin')},
+  {words:['듀마컵28','clb28'],    match:r=>r.name&&r.name.includes('듀마컵28')},
+  {words:['듀마컵32','clb32'],    match:r=>r.name&&r.name.includes('듀마컵32')},
+  {words:['듀마컵36','clb36'],    match:r=>r.name&&r.name.includes('듀마컵36')},
+  {words:['듀마컵40','clb40'],    match:r=>r.name&&r.name.includes('듀마컵40')},
+  {words:['듀마컵','duma-cup'],   match:r=>r.name&&r.name.toLowerCase().includes('duma-cup')},
+  {words:['듀마34','duma-34'],    match:r=>r.model==='DUMA-34'},
+  {words:['듀마28','duma-28'],    match:r=>r.model==='DUMA-28'},
+  {words:['듀마','duma'],         match:r=>r.name&&r.name.toLowerCase().includes('duma')},
+  {words:['스파이더','스파이더포트','spider'], match:r=>r.name&&r.name.toLowerCase().includes('spider')},
+  {words:['입고'],  match:r=>r.mode==='in'},
+  {words:['납품'],  match:r=>r.mode==='delivery'},
+  {words:['샘플'],  match:r=>r.mode==='sample'},
+];
+
+function renderHistory() {
+  const recs = loadRecords();
+  const q = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const mf = document.getElementById('filter-mode')?.value||'';
+  const modeLabel = {
+    in:'<span class="badge in">▲ 입고</span>',
+    delivery:'<span class="badge delivery">▼ 납품</span>',
+    sample:'<span class="badge sample">◎ 샘플</span>'
+  };
+
+  let res = [...recs].reverse();
+  if(mf) res = res.filter(r=>r.mode===mf);
+  if(q) {
+    const kw = KW_MAP.find(k=>k.words.some(w=>q===w||q.startsWith(w)));
+    if(kw) res = res.filter(kw.match);
+    else res = res.filter(r =>
+      (r.name||'').toLowerCase().includes(q)||
+      (r.date||'').includes(q)||(r.di||'').includes(q)||
+      (r.dest||'').toLowerCase().includes(q)||(r.lot||'').toLowerCase().includes(q)||
+      (r.model||'').toLowerCase().includes(q)||(r.memo||'').toLowerCase().includes(q)
+    );
+  }
+
+  const tbody = document.getElementById('history-tbody');
+  if(!res.length) { tbody.innerHTML=`<tr><td colspan="12" class="empty"><div class="ei">📋</div><div>기록 없음</div></td></tr>`; return; }
+  tbody.innerHTML = res.map(r=>`
+    <tr>
+      <td style="color:var(--t3)">${r.seq||''}</td>
+      <td>${r.date||''}</td>
+      <td>${modeLabel[r.mode]||r.mode}</td>
+      <td title="${r.name||''}">${(r.name||'-').split('(')[0].trim()}</td>
+      <td class="mono">${r.model||'-'}</td>
+      <td style="font-weight:600;color:${r.mode==='in'?'var(--gr)':'var(--rd)'}">${r.mode==='in'?'+':'-'}${r.qty||0}</td>
+      <td style="font-weight:600">${r.stock??''}</td>
+      <td>${r.dest||'-'}</td>
+      <td class="mono">${r.lot||'-'}</td>
+      <td class="mono" style="color:${isExpiringSoon(r.exp)?'var(--yl)':''}">${r.exp||'-'}</td>
+      <td style="color:var(--t3)">${r.memo||''}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openEditModal(${r.id})" style="padding:3px 7px;font-size:11px">✏</button></td>
+    </tr>`).join('');
+}
+
+function isExpiringSoon(exp) {
+  if(!exp||exp.length<7) return false;
+  const d = Math.ceil((new Date(exp)-new Date())/(1000*60*60*24));
+  return d < 90;
+}
+
+// ─── EDIT/DELETE RECORD ───────────────────────────────────
+function openEditModal(id) {
+  const recs = loadRecords();
+  const r = recs.find(x=>x.id===id);
+  if(!r) return;
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-date').value = r.date;
+  document.getElementById('edit-qty').value = r.qty;
+  document.getElementById('edit-memo').value = r.memo||'';
+  // populate dest select
+  const sel = document.getElementById('edit-dest');
+  const dests = loadDests();
+  sel.innerHTML = `<option value="">-</option>` + dests.map(d=>`<option value="${d}" ${d===r.dest?'selected':''}>${d}</option>`).join('');
+  showModal('edit-modal');
+}
+
+function saveEditRecord() {
+  const id = parseInt(document.getElementById('edit-id').value);
+  const recs = loadRecords();
+  const idx = recs.findIndex(x=>x.id===id);
+  if(idx===-1) return;
+  recs[idx].date   = document.getElementById('edit-date').value;
+  recs[idx].qty    = parseInt(document.getElementById('edit-qty').value)||1;
+  recs[idx].dest   = document.getElementById('edit-dest').value;
+  recs[idx].memo   = document.getElementById('edit-memo').value;
+  // Recalculate running stock from this point
+  SS('records', recs);
+  recalcStock();
+  renderAll();
+  closeModal('edit-modal');
+  toast('기록 수정됨', 'ok');
+}
+
+function deleteRecord() {
+  if(!confirm('이 기록을 삭제하시겠습니까?')) return;
+  const id = parseInt(document.getElementById('edit-id').value);
+  const recs = loadRecords().filter(x=>x.id!==id);
+  SS('records', recs);
+  recalcStock();
+  renderAll();
+  closeModal('edit-modal');
+  toast('기록 삭제됨', 'warn');
+}
+
+function recalcStock() {
+  // Rebuild running stock totals per product
+  const recs = loadRecords();
+  const running = {};
+  recs.sort((a,b)=>a.id-b.id).forEach(r => {
+    const k = r.di||r.model;
+    if(!running[k]) running[k] = 0;
+    running[k] += r.mode==='in' ? r.qty : -r.qty;
+    r.stock = running[k];
+  });
+  SS('records', recs);
+}
+
+// ─── STOCK ────────────────────────────────────────────────
+function renderStock() {
+  const sm = stockMap();
+  const safetyStk = loadSafetyStock();
+  const grid = document.getElementById('stock-grid');
+  const maxV = Math.max(...Object.values(sm).filter(v=>v>0), 10);
+
+  // Group by product (combine models of same product name)
+  const grouped = {};
+  PRODUCTS.forEach(p => {
+    const k = p.di||p.model;
+    const grpKey = p.name;
+    if(!grouped[grpKey]) grouped[grpKey] = {name:p.name, models:[], totalStock:0};
+    grouped[grpKey].models.push({model:p.model, di:p.di, stock:sm[k]||0});
+    grouped[grpKey].totalStock += sm[k]||0;
+  });
+
+  grid.innerHTML = Object.entries(grouped).map(([key, g]) => {
+    const v = g.totalStock;
+    const col = v <= 0 ? 'var(--rd)' : v <= 5 ? 'var(--yl)' : 'var(--gr)';
+    const pct = Math.min(Math.round(v/maxV*100), 100);
+    const safeK = g.models[0]?.di || g.models[0]?.model;
+    const safeMin = safetyStk[safeK] || 0;
+    return `<div class="sc">
+      <div class="sn">${g.name.split(' ')[0]}</div>
+      <div class="sm2">${g.models.map(m=>m.model).join(' / ')}</div>
+      <div class="sq" style="color:${col}">${v}</div>
+      <div class="sqs">개 재고${safeMin>0?` · 안전재고 ${safeMin}개`:''}</div>
+      <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderSafetyWarnings() {
+  const sm = stockMap();
+  const safetyStk = loadSafetyStock();
+  const area = document.getElementById('safety-warnings');
+  const warns = [];
+  Object.entries(safetyStk).forEach(([k, min]) => {
+    const v = sm[k]||0;
+    if(v <= min) {
+      const p = PRODUCTS.find(x=>(x.di||x.model)===k);
+      warns.push({name: p?p.name.split(' ')[0]:k, cur:v, min});
+    }
+  });
+  area.innerHTML = warns.map(w=>`<div class="alert-card ${w.cur<=0?'danger':'warn'}">
+    <span class="ai">${w.cur<=0?'📦':'⚠'}</span>
+    <div><div class="at">${w.name} — 현재 ${w.cur}개</div>
+    <div class="as">안전재고 ${w.min}개 이하입니다</div></div>
+  </div>`).join('');
+}
+
+// ─── SAFETY STOCK SETTINGS ────────────────────────────────
+function renderSafetyStockList() {
+  const safetyStk = loadSafetyStock();
+  const sm = stockMap();
+  const uniqueProds = PRODUCTS.filter((p,i,a)=>a.findIndex(x=>x.name===p.name)===i);
+  document.getElementById('safety-stock-list').innerHTML = uniqueProds.map(p => {
+    const k = p.di||p.model;
+    const minV = safetyStk[k]||0;
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="flex:1;font-size:12px">${p.name.split(' ')[0]}</span>
+      <input type="number" value="${minV}" min="0" style="width:60px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:5px 8px;color:var(--t1);font-size:13px;text-align:center;font-family:'JetBrains Mono';"
+        onchange="setSafetyStock('${k}', this.value)">
+      <span style="font-size:11px;color:var(--t3)">개 이상</span>
+    </div>`;
+  }).join('');
+}
+
+function setSafetyStock(k, v) {
+  const ss = loadSafetyStock();
+  ss[k] = parseInt(v)||0;
+  SS('safetyStock', ss);
+}
+
+// ─── PRODUCTS TABLE ───────────────────────────────────────
+function renderProductsTable() {
+  const sm = stockMap();
+  const ss = loadSafetyStock();
+  document.getElementById('products-tbody').innerHTML = PRODUCTS.map(p => {
+    const k = p.di||p.model;
+    const v = sm[k]||0;
+    const safeMin = ss[k]||0;
+    const col = v<=0?'var(--rd)':v<=safeMin?'var(--yl)':'var(--gr)';
+    return `<tr>
+      <td>${p.name.split('(')[0].trim()}</td>
+      <td class="mono">${p.model}</td>
+      <td class="mono" style="font-size:10px">${p.di||'-'}</td>
+      <td style="font-weight:700;color:${col}">${v}</td>
+      <td style="color:var(--t3)">${safeMin||'-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── DESTINATIONS ─────────────────────────────────────────
+function renderDestSelect() {
+  ['f-dest'].forEach(id => {
+    const sel = document.getElementById(id);
+    if(sel) sel.innerHTML = loadDests().map(d=>`<option value="${d}">${d}</option>`).join('');
+  });
+}
+function renderDestTags() {
+  document.getElementById('dest-list').innerHTML = loadDests().map(d =>
+    `<div class="dt" onclick="removeDest('${d}')">${d} ✕</div>`).join('');
+}
+function addDest() {
+  const v = document.getElementById('new-dest').value.trim();
+  if(!v) return;
+  const d = loadDests();
+  if(!d.includes(v)){ d.push(v); SS('destinations',d); renderDestTags(); renderDestSelect(); toast(v+' 추가됨','ok'); document.getElementById('new-dest').value=''; }
+}
+function removeDest(n) {
+  const d = loadDests().filter(x=>x!==n); SS('destinations',d); renderDestTags(); renderDestSelect();
+}
+
+// ─── API KEY ──────────────────────────────────────────────
+function saveApiKey() { localStorage.setItem('apiKey', document.getElementById('api-key').value); updateApiDot(); }
+function updateApiDot() { const d=document.getElementById('api-dot'); if(d) d.className='dot'+(loadApiKey()?' ok':''); }
+
+// ─── EXCEL EXPORT ─────────────────────────────────────────
+function exportExcel() {
+  const recs = loadRecords();
+  if(!recs.length){ toast('내보낼 데이터 없음','err'); return; }
+  const wb = XLSX.utils.book_new();
+  const hdr = ['순번','날짜','유형','제품명','모델명','입고수량','출고수량','현재고','납품처','출고형태','로트번호','유효기간','UDI-DI','메모'];
+  const rows = recs.map(r=>[r.seq,r.date,r.mode==='in'?'입고':r.mode==='delivery'?'납품':'샘플',r.name,r.model,r.mode==='in'?r.qty:0,r.mode!=='in'?r.qty:0,r.stock,r.dest,r.mode==='delivery'?'납품':r.mode==='sample'?'샘플':'',r.lot,r.exp,r.di,r.memo]);
+  const ws = XLSX.utils.aoa_to_sheet([hdr,...rows]);
+  ws['!cols']=[6,12,6,24,10,8,8,8,16,8,12,12,16,18].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws,'재고이력');
+  const sm=stockMap();
+  const ws2=XLSX.utils.aoa_to_sheet([['제품명','모델명','현재고','UDI-DI'],...PRODUCTS.filter((p,i,a)=>a.findIndex(x=>x.model===p.model)===i).map(p=>[p.name,p.model,sm[p.di||p.model]||0,p.di])]);
+  XLSX.utils.book_append_sheet(wb,ws2,'현재재고');
+  XLSX.writeFile(wb,'오렌지메딕스_재고_'+today()+'.xlsx');
+  toast('✅ 엑셀 내보내기 완료','ok');
+}
+
+// ─── EXCEL IMPORT ─────────────────────────────────────────
+function importExcel(input) {
+  if(!input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result,{type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws,{header:1});
+      const recs = loadRecords();
+      let n = 0;
+      data.slice(1).forEach((row,i) => {
+        if(!row||row.length<3) return;
+        const modeRaw = String(row[2]||'');
+        const m = modeRaw.includes('납품')?'delivery':modeRaw.includes('샘플')?'sample':'in';
+        recs.push({id:Date.now()+i,seq:recs.length+n+1,date:row[1]||today(),mode:m,name:row[3]||'',model:row[4]||'',qty:parseInt(row[5]||row[6]||1)||1,stock:parseInt(row[7]||0)||0,dest:row[8]||'',lot:row[10]||'',exp:row[11]||'',di:String(row[12]||''),memo:row[13]||''});
+        n++;
+      });
+      SS('records',recs);
+      renderAll();
+      closeModal('upload-modal');
+      toast(`✅ ${n}개 레코드 가져오기 완료`,'ok');
+    } catch(e){ toast('오류: '+e.message,'err'); }
+  };
+  reader.readAsBinaryString(input.files[0]);
+}
+
+function clearData() {
+  if(confirm('모든 재고 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+    localStorage.removeItem('records');
+    renderAll();
+    toast('데이터 초기화 완료','ok');
+  }
+}
+
+// ─── MODAL / LOADING / TOAST ──────────────────────────────
+function showModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+document.addEventListener('click', e=>{ if(e.target.classList.contains('modal-bg')) e.target.classList.remove('show'); });
+function showLoading(msg='처리 중...'){document.getElementById('loading-msg').textContent=msg;document.getElementById('loading').classList.add('show');}
+function hideLoading(){document.getElementById('loading').classList.remove('show');}
+function toast(msg,type=''){const el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;clearTimeout(window._tt);window._tt=setTimeout(()=>el.className='',3200);}
+</script>
+</body>
+</html>
